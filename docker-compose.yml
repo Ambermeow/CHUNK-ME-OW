@@ -1,0 +1,36 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://spelling:spelling@db:5432/spelling
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      FERNET_KEY: ${FERNET_KEY:?set FERNET_KEY in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8000}
+    volumes:
+      - appdata:/srv/data
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: spelling
+      POSTGRES_PASSWORD: spelling
+      POSTGRES_DB: spelling
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spelling"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # 数据库不暴露公网端口（仅 compose 内网可达）
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  appdata:

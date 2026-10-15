@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>每日英语拼写练习</title>
+<script src="/echarts.min.js" defer></script>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1f2937; --muted:#6b7280;
+    --accent:#2563eb; --accent-soft:#eff6ff;
+    --ok:#059669; --ok-soft:#ecfdf5; --err:#dc2626; --err-soft:#fef2f2;
+    --line:#e5e7eb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+       line-height:1.8;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:640px;margin:0 auto;padding:32px 20px 80px;position:relative}
+  header h1{font-size:20px;margin:0 0 4px;letter-spacing:.3px}
+  header .sub{color:var(--muted);font-size:13px}
+  .bar{position:sticky;top:0;background:var(--bg);padding:12px 0 8px;margin-bottom:12px}
+  .track{height:8px;background:var(--line);border-radius:99px;overflow:hidden}
+  .fill{height:100%;background:var(--accent);border-radius:99px;transition:width .3s}
+  .meta{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);margin-top:6px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px 24px 20px;
+        box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  .badge{display:inline-block;font-size:12px;color:var(--accent);background:var(--accent-soft);
+         padding:2px 12px;border-radius:99px;margin-bottom:12px}
+  .play{display:block;margin:8px auto 4px;width:64px;height:64px;border:none;border-radius:50%;
+        background:var(--accent);color:#fff;font-size:26px;cursor:pointer;transition:transform .15s}
+  .play:hover{transform:scale(1.06)}
+  .play:disabled{opacity:.4;cursor:default}
+  .hint-box{background:var(--accent-soft);border-left:3px solid var(--accent);
+            border-radius:8px;padding:12px 16px;margin:14px 0;font-size:15px;color:#1e3a8a}
+  .hint-box .lbl{font-size:12px;color:var(--accent);font-weight:600;display:block;margin-bottom:2px}
+  .rewrite{background:var(--ok-soft);border-left:3px solid var(--ok);border-radius:8px;
+           padding:12px 16px;margin:14px 0;font-size:16px;color:#064e3b}
+  .rewrite .ans{font-weight:700;letter-spacing:.5px}
+  input[type=text],input[type=password],input[type=email]{width:100%;padding:14px 16px;font-size:18px;letter-spacing:.6px;border:1.5px solid var(--line);
+        border-radius:12px;outline:none;transition:border-color .15s;font-family:inherit}
+  input:focus{border-color:var(--accent)}
+  .row{display:flex;gap:10px;margin-top:14px}
+  .btn{flex:1;padding:13px 0;border:none;border-radius:12px;font-size:15.5px;cursor:pointer;font-family:inherit}
+  .btn.primary{background:var(--accent);color:#fff}
+  .btn.ghost{background:var(--card);color:var(--accent);border:1.5px solid var(--accent)}
+  .btn:disabled{opacity:.45;cursor:default}
+  .finish .btn{width:100%;box-sizing:border-box}
+  .fb{margin-top:16px;border-radius:12px;padding:14px 16px;font-size:14.5px;display:none}
+  .fb.ok{background:var(--ok-soft);color:#065f46;display:block}
+  .fb.err{background:var(--err-soft);color:#991b1b;display:block}
+  .fb .lbl{font-weight:700}
+  .empty{text-align:center;padding:60px 0;color:var(--muted)}
+  .finish h2{color:var(--accent);margin:0 0 8px}
+  .stat{display:flex;gap:12px;margin:16px 0}
+  .stat div{flex:1;text-align:center;background:var(--bg);border-radius:12px;padding:14px 8px}
+  .stat b{display:block;font-size:24px}
+  .stat span{font-size:12px;color:var(--muted)}
+  .resume{background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:14px 16px;
+          margin-bottom:16px;font-size:14px;color:#92400e}
+  /* ---- 左侧全局看板 ---- */
+  body{padding-left:58px;transition:padding-left .22s ease}
+  body.dash-open{padding-left:266px}
+  .dash{position:fixed;left:0;top:0;bottom:0;width:58px;background:var(--card);
+        border-right:1px solid var(--line);z-index:30;overflow:hidden;
+        transition:width .22s ease;display:flex;flex-direction:column}
+  .dash.open{width:266px}
+  .dash-toggle{flex:none;margin:12px 11px 4px;width:36px;height:36px;border:none;
+        background:var(--accent-soft);color:var(--accent);font-size:17px;border-radius:10px;
+        cursor:pointer;transition:transform .15s}
+  .dash-toggle:hover{transform:scale(1.08)}
+  .dash-vert{position:absolute;left:15px;top:64px;width:28px;text-align:center;
+        writing-mode:vertical-rl;font-size:13px;color:var(--muted);letter-spacing:3px;
+        font-weight:600;pointer-events:none}
+  .dash.open .dash-vert{display:none}
+  .dash-body{display:none;padding:4px 18px 22px;flex:1;overflow:auto;
+        min-width:230px;white-space:normal}
+  .dash.open .dash-body{display:flex;flex-direction:column}
+  .dash-title{font-size:16px;font-weight:700;margin:4px 0 6px;letter-spacing:.3px}
+  .dash-sub{font-size:12px;color:var(--muted);margin-bottom:14px}
+  .dash-item{display:flex;justify-content:space-between;align-items:baseline;
+        padding:10px 0;border-bottom:1px dashed var(--line);font-size:14px}
+  .dash-item .l{color:var(--ink)}
+  .dash-item .v{font-weight:700;color:var(--accent);font-size:15px}
+  .dash-item.mastered .v{color:var(--ok)}
+  .dash-item.unstarted .v{color:var(--muted)}
+  .dash-est{margin-top:16px;background:var(--accent-soft);border-radius:12px;
+        padding:14px 16px;font-size:13.5px;color:#1e3a8a;line-height:1.7}
+  .dash-est b{font-size:16px;color:var(--accent)}
+  .dash-note{margin-top:12px;font-size:12px;color:var(--muted)}
+  .v.total{cursor:pointer;border-bottom:1px dashed currentColor}
+  .v.clickable{cursor:pointer;border-bottom:1px dashed currentColor;transition:filter .12s}
+  .v.clickable:hover{filter:brightness(.85)}
+  .dash-item.next .v{color:var(--ok)}
+  .wl-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:60;display:none;
+        align-items:center;justify-content:center;padding:24px}
+  .wl-overlay.open{display:flex}
+  .wl-panel{background:var(--card);border:1px solid var(--line);border-radius:16px;
+        width:min(640px,94vw);max-height:82vh;display:flex;flex-direction:column;
+        box-shadow:0 24px 60px rgba(0,0,0,.28)}
+  .wl-head{display:flex;align-items:center;justify-content:space-between;
+        gap:10px;padding:16px 20px;border-bottom:1px solid var(--line)}
+  .wl-head h3{margin:0;font-size:15.5px;white-space:nowrap}
+  .wl-head .grp{display:flex;align-items:center;gap:8px}
+  .wl-sort{border:1px solid var(--line);background:var(--accent-soft);color:var(--accent);
+        border-radius:8px;padding:5px 10px;font-size:12.5px;cursor:pointer;font-weight:600;
+        white-space:nowrap}
+  .wl-sort:hover{filter:brightness(.97)}
+  .wl-close{border:none;background:transparent;font-size:20px;color:var(--muted);
+        cursor:pointer;line-height:1;padding:2px 4px}
+  .wl-list{overflow:auto;padding:6px 20px 14px}
+  .wl-row{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px dashed var(--line);
+        font-size:13.5px;cursor:pointer}
+  .wl-row:hover{background:var(--accent-soft)}
+  .wl-row:last-child{border-bottom:none}
+  .wl-w{flex:1;color:var(--ink);font-weight:600;word-break:break-word}
+  .wl-c{max-width:220px;color:var(--muted);font-size:12.5px;flex:none;text-align:right;
+        overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .wl-d{color:var(--muted);font-size:12px;flex:none;min-width:82px;text-align:right}
+  .wl-s{width:42px;flex:none;text-align:right;font-size:11.5px;font-weight:700;color:var(--ink)}
+  .wl-s.st-D0{color:var(--muted);font-weight:400}
+  .wl-s.st-REP{color:var(--err)}
+  .wl-s.st-COM{color:var(--ok)}
+  .wl-empty{padding:26px 12px;text-align:center;color:var(--muted);font-size:13.5px}
+  .v.empty-v{color:var(--muted);border-bottom:none;cursor:default}
+  .v.empty-v:hover{filter:none}
+  .dash-import{margin-top:10px;width:100%;padding:8px 10px;font-size:13px;border-radius:8px;border:1px dashed var(--line);background:var(--bg);color:var(--ok);cursor:pointer;transition:background .12s,color .12s}
+  .dash-import:hover{background:var(--ok);color:#fff}
+  .imp-panel{width:min(680px,94vw)}
+  .imp-body{padding:14px 16px 18px}
+  .imp-tip{color:var(--muted);font-size:12.5px;line-height:1.7;margin:0 0 10px}
+  .imp-tip b{color:var(--ink)}
+  .imp-input{width:100%;min-height:130px;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.6;resize:vertical;outline:none}
+  .imp-input:focus{border-color:var(--ok)}
+  .imp-err{color:var(--err);font-size:12px;white-space:pre-wrap;margin:6px 0;display:none;line-height:1.6}
+  .imp-err.show{display:block}
+  .imp-actions{display:flex;gap:8px;margin-top:12px}
+  .imp-actions .btn{flex:none;padding:7px 16px;font-size:13px}
+  .imp-result{margin-top:10px;padding:8px 12px;border-radius:8px;font-size:12.5px;line-height:1.6;background:var(--bg);color:var(--muted);min-height:18px}
+  .imp-result.ok{background:var(--ok-soft);color:var(--ok)}
+  .imp-result.err{background:var(--err-soft);color:var(--err)}
+  .imp-tip2{color:var(--muted);font-size:11.5px;line-height:1.6;margin:12px 0 0}
+  /* ---- 登录 ---- */
+  #authOverlay{position:fixed;inset:0;background:var(--bg);z-index:80;display:none;
+        align-items:center;justify-content:center;padding:24px}
+  #authOverlay.open{display:flex}
+  .auth-card{width:min(380px,94vw);background:var(--card);border:1px solid var(--line);
+        border-radius:16px;padding:28px 26px;box-shadow:0 12px 40px rgba(0,0,0,.08)}
+  .auth-card h2{margin:0 0 4px;font-size:18px;color:var(--accent)}
+  .auth-card .sub{font-size:12.5px;color:var(--muted);margin-bottom:16px}
+  .auth-card input{margin-top:10px;font-size:15px;padding:11px 14px}
+  .auth-tabs{display:flex;gap:8px;margin:16px 0 4px}
+  .auth-tabs .btn{padding:9px 0;font-size:14px}
+  .auth-tabs .btn.active{background:var(--accent);color:#fff;border:none}
+  .auth-tabs .btn.inactive{background:var(--card);color:var(--accent);border:1.5px solid var(--accent)}
+  .auth-err{color:var(--err);font-size:12.5px;min-height:20px;margin-top:8px}
+  /* ---- 完成页详情 ---- */
+  .detail{margin-top:16px;border-top:1px dashed var(--line);padding-top:10px;max-height:46vh;overflow:auto}
+  .d-row{padding:9px 2px;border-bottom:1px dashed var(--line);font-size:13.5px}
+  .d-row:last-child{border-bottom:none}
+  .d-top{display:flex;gap:10px;align-items:baseline}
+  .d-w{font-weight:700;color:var(--ink)}
+  .d-ok{color:var(--ok);font-weight:700}
+  .d-no{color:var(--err);font-weight:700}
+  .d-cn{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .d-ex{color:var(--muted);font-size:12.5px;margin-top:2px;font-style:italic}
+  /* ---- 记忆曲线 ---- */
+  .curve-panel{width:min(720px,94vw)}
+  .curve-body{padding:10px 14px 16px}
+  #curveChart{width:100%;height:340px}
+  .curve-empty{padding:40px 12px;text-align:center;color:var(--muted);font-size:14px}
+  @media (max-width:640px){
+    body{padding-left:0}body.dash-open{padding-left:0}
+    .dash{width:46px}.dash.open{width:min(266px,84vw)}
+    .dash-vert{left:12px}
+  }
+</style>
+</head>
+<body>
+<div id="authOverlay">
+  <div class="auth-card">
+    <h2>每日英语拼写练习</h2>
+    <div class="sub">登录后开始今日练习，进度实时同步云端词库</div>
+    <div class="auth-tabs">
+      <button class="btn active" id="tabLogin">登录</button>
+      <button class="btn inactive" id="tabReg">注册</button>
+    </div>
+    <input type="email" id="authEmail" placeholder="邮箱" autocomplete="username">
+    <input type="password" id="authPass" placeholder="密码（至少 8 位）" autocomplete="current-password">
+    <div class="row">
+      <button class="btn primary" id="btnAuthGo">登录</button>
+    </div>
+    <div class="auth-err" id="authErr"></div>
+  </div>
+</div>
+
+<aside class="dash" id="dash">
+  <button class="dash-toggle" id="dashToggle" title="展开/收起全局看板">&#9776;</button>
+  <div class="dash-vert">全局看板</div>
+  <div class="dash-body" id="dashBody">
+    <div class="dash-title">全局看板</div>
+    <div class="dash-sub">词库总览 · <span id="dashDate"></span></div>
+    <div class="dash-item"><span class="l">总词数</span><span class="v total clickable" id="s-total" title="点击查看词库全表"></span></div>
+    <div class="dash-item"><span class="l">我过过的词（已开始）</span><span class="v clickable" id="s-started" data-set="started"></span></div>
+    <div class="dash-item mastered"><span class="l">已掌握</span><span class="v clickable" id="s-mastered" data-set="mastered"></span></div>
+    <div class="dash-item"><span class="l">正在滚动复习（周期）</span><span class="v clickable" id="s-cycling" data-set="cycling"></span></div>
+    <div class="dash-item"><span class="l">每日回炉中</span><span class="v clickable" id="s-daily" data-set="daily"></span></div>
+    <div class="dash-item unstarted"><span class="l">完全未学</span><span class="v clickable" id="s-unstarted" data-set="unstarted"></span></div>
+    <div class="dash-item next"><span class="l">明日复习词库</span><span class="v clickable" id="s-next" data-set="next" title="点击查看明日复习列表"></span></div>
+    <div class="dash-est">按每天滚动 <b>60</b> 词，预计还需 <b id="s-est"></b> 天可把词库完整过一遍。</div>
+    <div class="dash-note">注：估算 ≈ 剩余词数 ÷ 60 = 一遍的天数；实际“掌握”还需叠加艾宾浩斯每天最多 20 个新词与其多轮复习。</div>
+    <button class="btn primary dash-import" id="btnImport">＋ 导入词库</button>
+    <button class="btn ghost dash-import" id="btnLogout" style="color:var(--muted)">退出登录</button>
+  </div>
+</aside>
+
+<div class="wrap">
+  <header>
+    <div style="position:absolute;right:0">
+      <button class="btn ghost" id="btnRestartDay" style="flex:none;padding:4px 14px;font-size:12.5px">重新开始今日</button>
+    </div>
+    <h1>每日英语拼写练习</h1>
+    <div class="sub"><span id="hdrDate"></span> · 艾宾浩斯两阶段（当日过到会 → 1/2/4/7/15 周期）</div>
+  </header>
+  <div class="bar">
+    <div class="track"><div class="fill" id="fill"></div></div>
+    <div class="meta"><span id="prog">0 / 0</span><span id="roundTag"></span></div>
+  </div>
+  <div id="resumeBox" class="resume" style="display:none">
+    检测到未完成的练习记录，已自动恢复进度。点击 <b>播放</b> 或按任意键即可继续默写。
+  </div>
+  <div class="card" id="card">
+    <div class="badge" id="roundBadge">第 1 轮</div>
+    <button class="play" id="btnPlay" title="播放发音">&#9654;</button>
+    <div class="hint-box" id="hintBox" style="display:none"><span class="lbl">提示（例句）</span><span id="hintText"></span></div>
+    <div class="rewrite" id="rewriteBox" style="display:none"><span class="lbl">正确拼写（请照抄一遍）</span><span class="ans" id="rewriteAns"></span></div>
+    <input type="text" id="input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="输入你的拼写后回车">
+    <div class="row">
+      <button class="btn primary" id="btnSubmit">提交</button>
+      <button class="btn ghost" id="btnNext" style="display:none">下一个</button>
+    </div>
+    <div class="fb" id="fb"></div>
+  </div>
+  <div class="empty" id="empty" style="display:none">今日无练习词，休息一下吧。</div>
+  <div class="card finish" id="finish" style="display:none">
+    <h2>今日练习完成</h2>
+    <div class="stat">
+      <div><b id="fTotal"></b><span>总词数</span></div>
+      <div><b id="fPass" style="color:var(--ok)"></b><span>一遍过</span></div>
+      <div><b id="fRetry" style="color:var(--err)"></b><span>需重练</span></div>
+    </div>
+    <p style="font-size:13.5px;color:var(--muted)">点击下方按钮将结果提交到服务器并查看今日各词详情。</p>
+    <button class="btn primary" id="btnDetail">查看详情</button>
+    <div class="detail" id="finishDetail" style="display:none"></div>
+  </div>
+</div>
+
+<audio id="player" preload="auto"></audio>
+
+<div class="wl-overlay" id="wlOverlay">
+  <div class="wl-panel">
+    <div class="wl-head">
+      <h3 id="wlTitle">词库总览 <span id="wlCount" style="color:var(--muted);font-weight:400;font-size:13px"></span></h3>
+      <div class="grp">
+        <button class="wl-sort" id="wlSort" title="切换排序方向（最新在前/最晚在前）" style="display:none">&#8595;</button>
+        <button class="wl-close" id="wlClose" title="关闭">&#10005;</button>
+      </div>
+    </div>
+    <div class="wl-list" id="wlList"></div>
+  </div>
+</div>
+
+<div class="wl-overlay" id="curveOverlay">
+  <div class="wl-panel curve-panel">
+    <div class="wl-head">
+      <h3 id="curveTitle">记忆曲线</h3>
+      <div class="grp"><button class="wl-close" id="curveClose" title="关闭">&#10005;</button></div>
+    </div>
+    <div class="curve-body"><div id="curveChart"></div><div class="curve-empty" id="curveEmpty" style="display:none">还没有练习记录</div></div>
+  </div>
+</div>
+
+<div class="wl-overlay" id="impOverlay">
+  <div class="wl-panel imp-panel">
+    <div class="wl-head">
+      <h3>导入词库 <span class="imp-count" id="impCount" style="color:var(--muted);font-weight:400;font-size:13px"></span></h3>
+      <div class="grp"><button class="wl-close" id="impClose" title="关闭">&#10005;</button></div>
+    </div>
+    <div class="imp-body">
+      <p class="imp-tip">每行一条，格式：<b>单词 | 中文释义 | 英文例句</b>（释义和例句可留空）。支持多行一次导入。</p>
+      <textarea id="impText" class="imp-input" spellcheck="false" placeholder="overarching framework | 总体框架，总纲 | The report sets out an overarching framework for reform.&#10;refrain from | 克制，忍住不做 | Please refrain from smoking here."></textarea>
+      <div class="imp-err" id="impErr"></div>
+      <div class="imp-actions">
+        <button class="btn primary" id="impSubmit" disabled>提交到词库</button>
+        <button class="btn ghost" id="impClear">清空</button>
+      </div>
+      <div class="imp-result" id="impResult"></div>
+      <p class="imp-tip2">提交后由后端写入词库并即时生成缺失发音，看板与词库总览实时生效。</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+var API = "/api";
+var $ = function(id){ return document.getElementById(id); };
+function norm(s){ return (s||"").toLowerCase().replace(/[^a-z0-9]/g,""); }
+function esc(s){ var d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+/* ================= 认证与请求 ================= */
+var AT = "spelling_access_token", RT = "spelling_refresh_token";
+function tok(){ return localStorage.getItem(AT); }
+function setToks(a, r){ localStorage.setItem(AT, a); localStorage.setItem(RT, r); }
+function clearToks(){ localStorage.removeItem(AT); localStorage.removeItem(RT); }
+
+function authFetch(path, opts){
+  opts = opts || {};
+  opts.headers = Object.assign({"Content-Type":"application/json"}, opts.headers || {});
+  if (tok()) opts.headers["Authorization"] = "Bearer " + tok();
+  return fetch(API + path, opts).then(function(resp){
+    if (resp.status === 401 && localStorage.getItem(RT)){
+      return tryRefresh().then(function(ok){
+        if (!ok){ showAuth(); throw new Error("登录已过期，请重新登录"); }
+        opts.headers["Authorization"] = "Bearer " + tok();
+        return fetch(API + path, opts);
+      });
+    }
+    return resp;
+  }).then(function(resp){
+    if (resp.status >= 400){
+      return resp.json().catch(function(){ return {}; }).then(function(j){
+        var msg = (typeof j.detail === "string") ? j.detail
+                : (j.detail && j.detail[0] && j.detail[0].msg) || ("HTTP " + resp.status);
+        var e = new Error(msg); e.status = resp.status; throw e;
+      });
+    }
+    return resp.json();
+  });
+}
+function tryRefresh(){
+  return fetch(API + "/auth/refresh", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({refresh_token: localStorage.getItem(RT)})
+  }).then(function(r){
+    if (!r.ok) return false;
+    return r.json().then(function(j){ setToks(j.access_token, j.refresh_token); return true; });
+  }).catch(function(){ return false; });
+}
+
+var authMode = "login";
+function showAuth(){ $("authOverlay").classList.add("open"); }
+function hideAuth(){ $("authOverlay").classList.remove("open"); }
+function setAuthMode(m){
+  authMode = m;
+  $("tabLogin").className = "btn " + (m === "login" ? "active" : "inactive");
+  $("tabReg").className = "btn " + (m === "reg" ? "active" : "inactive");
+  $("btnAuthGo").textContent = m === "login" ? "登录" : "注册并登录";
+}
+$("tabLogin").addEventListener("click", function(){ setAuthMode("login"); });
+$("tabReg").addEventListener("click", function(){ setAuthMode("reg"); });
+$("btnAuthGo").addEventListener("click", doAuth);
+$("authPass").addEventListener("keydown", function(e){ if (e.key === "Enter") doAuth(); });
+function doAuth(){
+  var email = $("authEmail").value.trim(), pass = $("authPass").value;
+  $("authErr").textContent = "";
+  if (!email || !pass){ $("authErr").textContent = "请填写邮箱和密码"; return; }
+  authFetch("/auth/" + (authMode === "login" ? "login" : "register"), {
+    method:"POST", body: JSON.stringify({email: email, password: pass})
+  }).then(function(j){
+    setToks(j.access_token, j.refresh_token);
+    hideAuth(); bootApp();
+  }).catch(function(e){ $("authErr").textContent = e.message; });
+}
+$("btnLogout").addEventListener("click", function(){ clearToks(); location.reload(); });
+
+/* ================= 全局数据 ================= */
+var QUEUE = [], DATE = "", STATS = {}, VOCAB = [], NEXT = null;
+var UID = "";
+function queueKey(){ return "spelling_practice_" + UID + "_" + DATE; }
+
+/* ================= 练习引擎（与原页面一致） ================= */
+var state = null;
+function freshState(){
+  var rec = {}; var i;
+  for (i = 0; i < QUEUE.length; i++){
+    rec[QUEUE[i].correct] = {attempts:0, errors:[], need:0, met:0, judged:false, pass:false};
+  }
+  return {records:rec, done:false};
+}
+function loadSaved(){
+  try{
+    var s = JSON.parse(localStorage.getItem(queueKey()));
+    if (s && s.records){
+      var i, w;
+      for (i = 0; i < QUEUE.length; i++){
+        w = QUEUE[i].correct;
+        if (!s.records[w]) s.records[w] = {attempts:0, errors:[], need:0, met:0, judged:false, pass:false};
+        else {
+          var r = s.records[w];
+          if (r.need == null) r.need = 0;
+          if (r.met == null) r.met = 0;
+          if (r.judged == null) r.judged = !!r.attempts;
+          if (r.pass == null) r.pass = r.passRound > 0;
+          if (!r.errors && r.wrong){ r.errors = r.wrong.slice(); delete r.wrong; }
+          if (!r.errors) r.errors = [];
+          if (r.passRound && !r.pass){ r.pass = true; }
+        }
+      }
+      return s;
+    }
+  }catch(e){}
+  return null;
+}
+function save(){ try{ localStorage.setItem(queueKey(), JSON.stringify(state)); }catch(e){} }
+
+var idx = 0, answered = false, passedLast = false, phase = "first";
+
+function totalCoreNeed(){
+  var errs = 0;
+  QUEUE.forEach(function(q){ errs += state.records[q.correct].errors.length; });
+  return 2 * errs;
+}
+function pendingList(ph){
+  var rec = state.records, i, arr = [];
+  for (i = 0; i < QUEUE.length; i++){
+    var r = rec[QUEUE[i].correct];
+    if (ph === "first"){ if (!r.judged) arr.push(QUEUE[i]); }
+    else { if (r.need > 0) arr.push(QUEUE[i]); }
+  }
+  return arr;
+}
+function cur(){ return QUEUE[idx]; }
+function curRec(){ return state.records[cur().correct]; }
+
+function renderProgress(){
+  if (phase === "first"){
+    var judged = 0, i;
+    for (i = 0; i < QUEUE.length; i++){ if (state.records[QUEUE[i].correct].judged) judged++; }
+    $("fill").style.width = (judged / QUEUE.length * 100) + "%";
+    $("prog").textContent = "第 1 轮 " + judged + " / " + QUEUE.length;
+    return;
+  }
+  var total = totalCoreNeed(), met = 0, j;
+  for (j = 0; j < QUEUE.length; j++){ met += state.records[QUEUE[j].correct].met; }
+  $("fill").style.width = (total === 0 ? 100 : (met / total * 100)) + "%";
+  $("prog").textContent = "滚动复审 " + met + " / " + total + " 正确";
+}
+function renderRoundUI(){
+  var r = curRec();
+  var tag = (phase === "first") ? "第 1 轮" : "滚动复审";
+  if (phase === "roll"){ tag += " · 还需正确 " + r.need + " 次"; }
+  $("hintBox").style.display = "none";
+  $("rewriteBox").style.display = "none";
+  $("roundBadge").textContent = tag;
+}
+
+/* —— 音频：带 Bearer 拉取 blob 并缓存 —— */
+var audioCache = {};
+function fetchAudioBlob(path){
+  return fetch(API + path, {headers:{"Authorization":"Bearer " + (tok() || "")}});
+}
+function setAudioSrc(u){
+  var a = $("player"); a.src = u;
+  var p = a.play(); if (p && p.catch) p.catch(function(){});
+}
+function play(){
+  var q = cur();
+  if (!q.audio_url || !/[0-9a-f]{12}\.mp3/.test(q.audio_url)){ return; }
+  var cached = audioCache[q.correct];
+  if (cached){ setAudioSrc(cached); return; }
+  fetchAudioBlob(q.audio_url.replace(API, "")).then(function(resp){
+    if (!resp.ok) throw new Error("voice " + resp.status);
+    return resp.blob();
+  }).then(function(blob){
+    var u = URL.createObjectURL(blob);
+    audioCache[q.correct] = u;
+    setAudioSrc(u);
+  }).catch(function(){});
+}
+
+function submit(){
+  if (answered && passedLast) return;
+  var q = cur(), r = curRec();
+  var val = $("input").value.trim();
+  if (!val){ return; }
+  answered = true;
+  r.attempts += 1;
+  var ok = (norm(val) === norm(q.correct));   // 严格相等；大小写/空格/标点不计较
+  var fb = $("fb");
+  var html = '<span class="lbl">' + (ok ? "✔ 正确" : "✘ 拼错") + "</span><br>你的拼写：" + esc(val) +
+             "<br>正确拼写：<b>" + esc(q.correct) + "</b>" +
+             (q.cn ? "<br>中文释义：" + esc(q.cn) : "");
+  if (phase === "first"){
+    r.judged = true;
+    if (ok){ r.need = 0; r.met = 0; r.pass = true; fb.className = "fb ok"; }
+    else { r.need = 2; r.met = 0; r.pass = false; r.errors.push(val); fb.className = "fb err"; }
+  } else {
+    if (ok){
+      r.met += 1; r.need = Math.max(0, r.need - 1);
+      if (r.need === 0){ r.pass = true; }
+      fb.className = "fb ok";
+    } else {
+      r.need += 2; r.errors.push(val); fb.className = "fb err";
+    }
+  }
+  passedLast = true;
+  fb.innerHTML = html;
+  $("btnSubmit").style.display = "none";
+  $("btnNext").style.display = "";
+  $("input").focus();
+  renderProgress();
+  save();
+}
+
+function loadWord(){
+  answered = false; passedLast = false;
+  $("input").value = ""; $("input").disabled = false;
+  $("fb").className = "fb";
+  $("btnSubmit").style.display = ""; $("btnNext").style.display = "none";
+  renderRoundUI();
+  play();
+  $("input").focus();
+  renderProgress();
+}
+
+function next(){
+  if (!answered) return;
+  if (phase === "first" && pendingList("first").length === 0){ phase = "roll"; }
+  var pend = pendingList(phase);
+  if (pend.length === 0){ finish(); return; }
+  idx = QUEUE.indexOf(pend[0]);
+  loadWord();
+}
+
+function finish(){
+  state.done = true; save();
+  $("card").style.display = "none";
+  $("finish").style.display = "";
+  var oneShot = 0, i;
+  for (i = 0; i < QUEUE.length; i++){ if (state.records[QUEUE[i].correct].errors.length === 0) oneShot++; }
+  $("fTotal").textContent = QUEUE.length;
+  $("fPass").textContent = oneShot;
+  $("fRetry").textContent = QUEUE.length - oneShot;
+}
+
+/* —— 完成页：查看详情 = POST /today/submit（幂等）+ 明细列表 —— */
+function resultsPayload(){
+  return {date: DATE, results: QUEUE.map(function(q){
+    var r = state.records[q.correct];
+    return {word: q.correct, attempts: r.attempts, errors: r.errors,
+            one_shot: r.errors.length === 0};
+  })};
+}
+function renderDetail(){
+  var box = $("finishDetail"); box.innerHTML = ""; box.style.display = "";
+  QUEUE.forEach(function(q){
+    var r = state.records[q.correct];
+    var ok = r.errors.length === 0;
+    var d = document.createElement("div"); d.className = "d-row";
+    d.innerHTML = '<div class="d-top"><span class="d-w"></span>' +
+      (ok ? '<span class="d-ok">✔ 一遍过</span>'
+          : '<span class="d-no">✘ 拼错 ' + r.errors.length + ' 次 → <b></b></span>') +
+      '</div><div class="d-cn"></div><div class="d-ex"></div>';
+    d.children[0].children[0].textContent = q.correct;
+    if (!ok) d.children[0].children[1].querySelector("b").textContent = q.correct;
+    d.children[1].textContent = q.cn;
+    d.children[2].textContent = q.ex;
+    box.appendChild(d);
+  });
+}
+$("btnDetail").addEventListener("click", function(){
+  var btn = $("btnDetail");
+  if (localStorage.getItem(queueKey() + "_submitted")){ renderDetail(); return; }
+  btn.disabled = true; btn.textContent = "提交中…";
+  authFetch("/today/submit", {method:"POST", body: JSON.stringify(resultsPayload())})
+    .then(function(){
+      localStorage.setItem(queueKey() + "_submitted", "1");
+      btn.textContent = "已提交 ✓ 查看详情";
+      renderDetail(); loadDashboard();
+    })
+    .catch(function(e){ btn.disabled = false; btn.textContent = "查看详情"; alert("提交失败：" + e.message); });
+});
+
+$("btnPlay").addEventListener("click", play);
+$("btnSubmit").addEventListener("click", submit);
+$("input").addEventListener("keydown", function(e){
+  if (e.key === "Enter"){ e.preventDefault(); (answered && passedLast) ? next() : submit(); }
+});
+$("input").addEventListener("input", function(){
+  if (answered && !passedLast){ var fb = $("fb"); fb.className = "fb"; fb.innerHTML = ""; }
+});
+$("btnNext").addEventListener("click", next);
+
+function startFresh(){
+  state = freshState(); save();
+  if (QUEUE.length === 0){ $("card").style.display = "none"; $("empty").style.display = ""; return; }
+  idx = 0; loadWord();
+}
+function autoStart(){
+  if (QUEUE.length === 0){ $("card").style.display = "none"; $("empty").style.display = ""; return; }
+  phase = (pendingList("first").length > 0) ? "first" : "roll";
+  var pend = pendingList(phase);
+  if (pend.length === 0){ finish(); return; }
+  idx = QUEUE.indexOf(pend[0]);
+  loadWord();
+}
+
+/* ================= 看板 / 词库（实时查库） ================= */
+function renderDash(){
+  var s = STATS || {};
+  $("s-total").textContent = s.total || 0;
+  $("s-started").textContent = s.started || 0;
+  $("s-mastered").textContent = s.mastered || 0;
+  $("s-cycling").textContent = s.cycling || 0;
+  $("s-daily").textContent = s.daily || 0;
+  $("s-unstarted").textContent = s.unstarted || 0;
+  $("s-est").textContent = (s.est_days60 == null ? "—" : s.est_days60);
+  var nx = s.next_review_count;
+  $("s-next").textContent = nx == null ? "—" : nx;
+  $("s-next").classList.toggle("empty-v", nx == null);
+}
+function loadDashboard(){
+  return authFetch("/dashboard").then(function(j){ STATS = j; renderDash(); });
+}
+
+var wlAsc = false, wlMode = "all";
+var TITLES = {
+  all: "词库总览", started: "我过过的词（已开始）", mastered: "已掌握",
+  cycling: "正在滚动复习（周期）", daily: "每日回炉中",
+  unstarted: "完全未学", next: "明日复习词库"
+};
+function openWL(mode){
+  wlMode = mode || "all";
+  $("wlOverlay").classList.add("open");
+  $("wlList").innerHTML = '<div class="wl-empty">加载中…</div>';
+  $("wlSort").style.display = (wlMode === "all") ? "" : "none";
+  if (wlMode === "next"){
+    authFetch("/next").then(function(j){ NEXT = j.items; renderWL(NEXT.map(function(x){
+      return {id: null, word: x.word, cn: x.cn, added_on: "", status: WSTAT[x.word] || ""};
+    })); });
+  } else {
+    var path = "/words?sort=added_on&dir=" + (wlAsc ? "asc" : "desc") +
+               (wlMode === "all" ? "" : "&filter=" + wlMode);
+    authFetch(path).then(function(list){
+      if (wlMode === "all") VOCAB = list;
+      renderWL(list);
+    });
+  }
+}
+var WSTAT = {};
+function renderWL(list){
+  $("wlTitle").innerHTML = TITLES[wlMode] + ' <span style="color:var(--muted);font-weight:400;font-size:13px">· 共 ' + list.length + ' 词</span>';
+  $("wlSort").textContent = wlAsc ? "\u2191" : "\u2193";
+  var box = $("wlList"); box.innerHTML = "";
+  if (list.length === 0){
+    box.innerHTML = '<div class="wl-empty">' + (wlMode === "next" ? "明日暂无复习词库" : "暂无词条") + '</div>';
+    return;
+  }
+  list.forEach(function(w){
+    var r = document.createElement("div"); r.className = "wl-row";
+    r.title = w.id ? "点击查看记忆曲线" : "";
+    r.innerHTML = '<span class="wl-w"></span><span class="wl-c"></span><span class="wl-s"></span><span class="wl-d"></span>';
+    r.children[0].textContent = w.word;
+    r.children[1].textContent = w.cn || "";
+    var st = w.status || WSTAT[w.word] || "";
+    if (st){ r.children[2].textContent = st; r.children[2].className = "wl-s st-" + st;
+             r.children[2].title = {REP:"回炉词",D0:"未学新词",D1:"首天一遍过",D2:"第2天一遍过",D4:"第4天一遍过",D7:"第7天一遍过",D15:"第15天一遍过",COM:"复习完成"}[st] || st; }
+    r.children[3].textContent = w.added_on || "";
+    if (w.id) r.addEventListener("click", function(){ openCurve(w.id, w.word); });
+    box.appendChild(r);
+  });
+}
+$("wlSort").addEventListener("click", function(){ wlAsc = !wlAsc; openWL(wlMode); });
+["s-total","s-started","s-mastered","s-cycling","s-daily","s-unstarted","s-next"].forEach(function(id){
+  var el = $(id);
+  if (!el) return;
+  el.addEventListener("click", function(){ openWL(el.getAttribute("data-set") || "all"); });
+});
+$("wlClose").addEventListener("click", function(){ $("wlOverlay").classList.remove("open"); });
+$("wlOverlay").addEventListener("click", function(e){ if (e.target === this) this.classList.remove("open"); });
+
+/* ================= 记忆曲线（§7） ================= */
+var STATUS_LEVEL = {D0:0, REP:1, D1:2, D2:3, D4:4, D7:5, D15:6, COM:7};
+var curveChart = null;
+function openCurve(wordId, word){
+  $("curveOverlay").classList.add("open");
+  $("curveTitle").textContent = "记忆曲线 · " + word;
+  $("curveEmpty").style.display = "none"; $("curveChart").style.display = "";
+  authFetch("/words/" + wordId + "/history").then(function(pts){
+    pts = pts.filter(function(p){ return p.status != null; });
+    if (!pts.length){ $("curveChart").style.display = "none"; $("curveEmpty").style.display = ""; return; }
+    if (!window.echarts){ $("curveChart").style.display = "none";
+      $("curveEmpty").textContent = "图表组件加载失败（离线环境请引入 echarts.min.js）";
+      $("curveEmpty").style.display = ""; return; }
+    if (!curveChart) curveChart = echarts.init($("curveChart"));
+    var data = pts.map(function(p){ return [p.date, p.status == null ? null : STATUS_LEVEL[p.status]]; });
+    curveChart.setOption({
+      grid:{left:60, right:24, top:24, bottom:40},
+      tooltip:{trigger:"axis", formatter:function(ps){
+        var p = ps[0]; if (p.value[1] == null) return p.value[0] + "<br>无状态记录";
+        var inv = {0:"D0 不记得",1:"REP 回炉",2:"D1",3:"D2",4:"D4",5:"D7",6:"D15",7:"COM 已记住"};
+        return p.value[0] + "<br>" + inv[p.value[1]];
+      }},
+      xAxis:{type:"time", axisLabel:{rotate:30}},
+      yAxis:{type:"value", min:0, max:7, interval:1,
+        axisLabel:{formatter:function(v){ return ["不记得","REP","D1","D2","D4","D7","D15","已记住"][v]; }},
+        name:"记忆强度"},
+      series:[{type:"line", data:data, connectNulls:true, symbolSize:9,
+        lineStyle:{width:2.5, color:"#2563eb"}, itemStyle:{color:"#2563eb"},
+        areaStyle:{color:"rgba(37,99,235,.06)"}}]
+    });
+    curveChart.resize();
+  }).catch(function(e){ $("curveChart").style.display = "none";
+    $("curveEmpty").textContent = "加载失败：" + e.message; $("curveEmpty").style.display = ""; });
+}
+$("curveClose").addEventListener("click", function(){ $("curveOverlay").classList.remove("open"); });
+$("curveOverlay").addEventListener("click", function(e){ if (e.target === this) this.classList.remove("open"); });
+
+/* ================= 导入词库 ================= */
+function parseImport(){
+  var raw = $("impText").value;
+  var lines = raw.split(/\n/);
+  var out = [], err = "";
+  lines.forEach(function(ln, idx){
+    ln = ln.trim();
+    if (!ln) return;
+    if (ln.indexOf("|") < 0){ err += "第" + (idx + 1) + "行缺少分隔符 |：" + ln + "\n"; return; }
+    var parts = ln.split("|");
+    var word = (parts[0] || "").trim();
+    if (!word){ err += "第" + (idx + 1) + "行没有单词\n"; return; }
+    out.push({word: word, cn: (parts[1] || "").trim(), ex: (parts[2] || "").trim()});
+  });
+  return {out: out, err: err};
+}
+function refreshImp(){
+  var r = parseImport();
+  $("impErr").textContent = r.err;
+  $("impErr").classList.toggle("show", !!r.err);
+  $("impCount").textContent = "· 待导入 " + r.out.length + " 词" + (r.err ? "（含 " + r.err.split("\n").length + " 处错误）" : "");
+  $("impSubmit").disabled = !(r.out.length > 0 && !r.err);
+}
+$("impText").addEventListener("input", refreshImp);
+$("btnImport").addEventListener("click", function(){ $("impOverlay").classList.add("open"); refreshImp(); });
+$("impClose").addEventListener("click", function(){ $("impOverlay").classList.remove("open"); });
+$("impOverlay").addEventListener("click", function(e){ if (e.target === this) this.classList.remove("open"); });
+$("impClear").addEventListener("click", function(){ $("impText").value = ""; refreshImp(); $("impResult").textContent = ""; });
+$("impSubmit").addEventListener("click", function(){
+  var r = parseImport();
+  if (r.out.length === 0) return;
+  var btn = $("impSubmit"), res = $("impResult");
+  btn.disabled = true; btn.textContent = "提交中…";
+  res.className = "imp-result"; res.textContent = "正在写入词库并生成发音…";
+  authFetch("/vocab/import", {method:"POST", body: JSON.stringify({words: r.out})})
+    .then(function(j){
+      res.className = "imp-result ok";
+      res.innerHTML = "✅ 已写入 " + j.inserted + " 词，词库总数 " + j.total + "。" +
+        (j.skipped && j.skipped.length ? " 已存在跳过：" + j.skipped.join("、") + "。" : "") +
+        (j.audio_ok ? " 发音已就绪。" : " 发音失败：" + j.audio_failed.join("、") + "（稍后重新导入重试）");
+      $("impText").value = ""; refreshImp();
+      loadDashboard();
+    })
+    .catch(function(e){ res.className = "imp-result err"; res.textContent = "提交失败：" + e.message; })
+    .finally(function(){ btn.disabled = false; btn.textContent = "提交到词库"; });
+});
+
+/* ================= 看板展开/收起、重新开始 ================= */
+$("dashToggle").addEventListener("click", function(){
+  $("dash").classList.toggle("open");
+  document.body.classList.toggle("dash-open");
+});
+$("btnRestartDay").addEventListener("click", function(){
+  if (confirm("确定重新开始今日？会清空今日已做的所有记录。")){
+    localStorage.removeItem(queueKey() + "_submitted");
+    startFresh(); scrollTo(0, 0);
+  }
+});
+
+/* ================= 音频自动播放解锁 ================= */
+var started = false;
+function armAudio(){
+  if (started) return; started = true;
+  setTimeout(function(){
+    var a = $("player"), q = cur();
+    if (a && a.paused && q && q.audio_url){ play(); }
+  }, 80);
+}
+document.addEventListener("click", armAudio, true);
+document.addEventListener("keydown", armAudio, true);
+document.addEventListener("touchstart", armAudio, true);
+
+/* ================= 启动 ================= */
+function bootApp(){
+  Promise.all([authFetch("/auth/me"), authFetch("/today"), authFetch("/dashboard")])
+    .then(function(rs){
+      UID = String(rs[0].id);
+      var today = rs[1];
+      DATE = today.date; STATS = rs[2];
+      $("hdrDate").textContent = DATE; $("dashDate").textContent = DATE;
+      QUEUE = today.items;
+      renderDash();
+      var saved = loadSaved();
+      if (today.has_local_draft_hint && !(saved && saved.done)){
+        // 今日已提交（其他会话/迁移数据）：展示完成页与后端汇总
+        state = saved || freshState(); state.done = true;
+        $("card").style.display = "none";
+        $("finish").style.display = "";
+        var sm = today.submitted_summary || {};
+        $("fTotal").textContent = sm.total == null ? "—" : sm.total;
+        $("fPass").textContent = sm.one_shot == null ? "—" : sm.one_shot;
+        $("fRetry").textContent = sm.retry == null ? "—" : sm.retry;
+        $("btnDetail").style.display = "none";
+        return;
+      }
+      if (saved && saved.done){ state = saved; finish(); }
+      else { state = saved ? saved : freshState(); if (saved) $("resumeBox").style.display = ""; autoStart(); }
+    })
+    .catch(function(e){
+      if (e.status === 401){ showAuth(); return; }
+      alert("加载失败：" + e.message);
+    });
+}
+
+if (tok()){ setAuthMode("login"); bootApp(); }
+else { setAuthMode("login"); showAuth(); }
+})();
+</script>
+</body>
+</html>
