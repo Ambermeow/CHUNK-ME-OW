@@ -155,6 +155,32 @@ def test_memory_curve(client):
                       "D1", "D2", "D4", "D7", "D15", "COM"]
 
 
+def test_new_words_per_day_config(client):
+    """每日新词 N：用户配置写库生效，选词/看板估算随 N 变化；非法值拒绝。"""
+    _, hdr = register(client, "s7@example.com")
+    _import(client, hdr, [f"nwc{i}" for i in range(10)])
+
+    r = client.put("/api/me/settings", headers=hdr, json={"new_words_per_day": 3})
+    assert r.status_code == 200 and r.json()["new_words_per_day"] == 3
+
+    items = client.get("/api/today", headers=hdr).json()["items"]
+    assert len(items) == 3  # 全是新词，无复习 → 恰好 N 个
+
+    dash = client.get("/api/dashboard", headers=hdr).json()
+    assert dash["new_words_per_day"] == 3
+    assert dash["est_days"] == 4  # ceil(10 / 3)
+
+    # 非法值
+    assert client.put("/api/me/settings", headers=hdr,
+                      json={"new_words_per_day": 0}).status_code == 422
+    assert client.put("/api/me/settings", headers=hdr,
+                      json={"new_words_per_day": 101}).status_code == 422
+
+    # 改回 5 → 今日队列立即变 5
+    client.put("/api/me/settings", headers=hdr, json={"new_words_per_day": 5})
+    assert len(client.get("/api/today", headers=hdr).json()["items"]) == 5
+
+
 def test_no_llm_calls():
     """验收10：全程无任何 LLM 调用（代码中不存在模型请求路径）。"""
     import pathlib

@@ -25,6 +25,7 @@ class UserSettings(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     llm_model: Mapped[str | None] = mapped_column(String(128))
     api_key_encrypted: Mapped[str | None] = mapped_column(String(512))
+    new_words_per_day: Mapped[int | None] = mapped_column(Integer)  # None = 用环境变量默认
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 

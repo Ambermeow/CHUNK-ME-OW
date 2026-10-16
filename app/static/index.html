@@ -87,7 +87,14 @@
   .dash-est{margin-top:16px;background:var(--accent-soft);border-radius:12px;
         padding:14px 16px;font-size:13.5px;color:#1e3a8a;line-height:1.7}
   .dash-est b{font-size:16px;color:var(--accent)}
+  .dash-cfg{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--ink)}
+  .dash-cfg label{white-space:nowrap}
+  .dash-cfg input{width:64px;padding:6px 8px;font-size:14px;border:1.5px solid var(--line);
+        border-radius:8px;outline:none;text-align:center;font-family:inherit}
+  .dash-cfg input:focus{border-color:var(--accent)}
+  .dash-cfg .btn{flex:none;padding:6px 14px;font-size:13px;border-radius:8px}
   .dash-note{margin-top:12px;font-size:12px;color:var(--muted)}
+  #newCapMsg:not(:empty){color:var(--ok)}
   .v.total{cursor:pointer;border-bottom:1px dashed currentColor}
   .v.clickable{cursor:pointer;border-bottom:1px dashed currentColor;transition:filter .12s}
   .v.clickable:hover{filter:brightness(.85)}
@@ -207,8 +214,14 @@
     <div class="dash-item"><span class="l">每日回炉中</span><span class="v clickable" id="s-daily" data-set="daily"></span></div>
     <div class="dash-item unstarted"><span class="l">完全未学</span><span class="v clickable" id="s-unstarted" data-set="unstarted"></span></div>
     <div class="dash-item next"><span class="l">明日复习词库</span><span class="v clickable" id="s-next" data-set="next" title="点击查看明日复习列表"></span></div>
-    <div class="dash-est">按每天滚动 <b>60</b> 词，预计还需 <b id="s-est"></b> 天可把词库完整过一遍。</div>
-    <div class="dash-note">注：估算 ≈ 剩余词数 ÷ 60 = 一遍的天数；实际“掌握”还需叠加艾宾浩斯每天最多 20 个新词与其多轮复习。</div>
+    <div class="dash-est">每日新词 <b id="s-newcap">—</b> 个，预计还需 <b id="s-est"></b> 天可把未学词全部过一遍。</div>
+    <div class="dash-cfg">
+      <label for="newCapInput">每日新词量 N</label>
+      <input type="number" id="newCapInput" min="1" max="100" step="1">
+      <button class="btn primary" id="btnNewCap">确定</button>
+    </div>
+    <div class="dash-note" id="newCapMsg"></div>
+    <div class="dash-note">注：估算 ≈ 未掌握词数 ÷ N；复习词（艾宾浩斯到期 + 当日回炉）在 N 之外按规则滚动加入，每日上限 40。</div>
     <button class="btn primary dash-import" id="btnImport">＋ 导入词库</button>
     <button class="btn ghost dash-import" id="btnLogout" style="color:var(--muted)">退出登录</button>
   </div>
@@ -287,7 +300,7 @@
       <div class="grp"><button class="wl-close" id="impClose" title="关闭">&#10005;</button></div>
     </div>
     <div class="imp-body">
-      <p class="imp-tip">每行一条，格式：<b>单词 | 中文释义 | 英文例句</b>（释义和例句可留空）。支持多行一次导入。</p>
+      <p class="imp-tip">每行一条，格式：<b>单词 | 中文释义 | 英文例句</b>（释义和例句可留空）。也支持直接粘贴 <b>Markdown 表格</b>（如 <b>| Chunk | 中文释义 | 例句 |</b>），表头与分隔行自动跳过，<b>**加粗**</b> 等标记自动清理。</p>
       <textarea id="impText" class="imp-input" spellcheck="false" placeholder="overarching framework | 总体框架，总纲 | The report sets out an overarching framework for reform.&#10;refrain from | 克制，忍住不做 | Please refrain from smoking here."></textarea>
       <div class="imp-err" id="impErr"></div>
       <div class="imp-actions">
@@ -615,7 +628,10 @@ function renderDash(){
   $("s-cycling").textContent = s.cycling || 0;
   $("s-daily").textContent = s.daily || 0;
   $("s-unstarted").textContent = s.unstarted || 0;
-  $("s-est").textContent = (s.est_days60 == null ? "—" : s.est_days60);
+  $("s-est").textContent = (s.est_days == null ? "—" : s.est_days);
+  $("s-newcap").textContent = s.new_words_per_day == null ? "—" : s.new_words_per_day;
+  var nci = $("newCapInput");
+  if (nci && document.activeElement !== nci) nci.value = s.new_words_per_day == null ? "" : s.new_words_per_day;
   var nx = s.next_review_count;
   $("s-next").textContent = nx == null ? "—" : nx;
   $("s-next").classList.toggle("empty-v", nx == null);
@@ -623,6 +639,35 @@ function renderDash(){
 function loadDashboard(){
   return authFetch("/dashboard").then(function(j){ STATS = j; renderDash(); });
 }
+
+/* —— 每日新词量 N：写库并刷新词库 —— */
+$("btnNewCap").addEventListener("click", function(){
+  var n = parseInt($("newCapInput").value, 10);
+  var msg = $("newCapMsg");
+  if (!(n >= 1 && n <= 100)){ msg.textContent = "请输入 1–100 之间的整数"; return; }
+  // 今日是否已练过：已提交，或本地已有作答记录
+  var practiced = !!localStorage.getItem(queueKey() + "_submitted");
+  if (!practiced && state){
+    for (var k in state.records){ if (state.records[k].attempts > 0){ practiced = true; break; } }
+  }
+  var btn = this; btn.disabled = true; msg.textContent = "保存中…";
+  authFetch("/me/settings", {method:"PUT", body: JSON.stringify({new_words_per_day: n})})
+    .then(function(){ return loadDashboard(); })
+    .then(function(){
+      if (practiced){
+        msg.textContent = "已保存：每日新词 " + n + " 个。今日已练习，新词量将从明日复习词库起生效。";
+        return;
+      }
+      return authFetch("/today").then(function(today){
+        DATE = today.date; QUEUE = today.items;
+        localStorage.removeItem(queueKey());
+        startFresh();
+        msg.textContent = "已保存：每日新词 " + n + " 个，今日词库已更新（共 " + QUEUE.length + " 词）。";
+      });
+    })
+    .catch(function(e){ msg.textContent = "保存失败：" + e.message; })
+    .finally(function(){ btn.disabled = false; });
+});
 
 var wlAsc = false, wlMode = "all";
 var TITLES = {
@@ -718,6 +763,7 @@ $("curveClose").addEventListener("click", function(){ $("curveOverlay").classLis
 $("curveOverlay").addEventListener("click", function(e){ if (e.target === this) this.classList.remove("open"); });
 
 /* ================= 导入词库 ================= */
+function mdCell(s){ return s.replace(/[*`]/g, "").trim(); }
 function parseImport(){
   var raw = $("impText").value;
   var lines = raw.split(/\n/);
@@ -725,11 +771,23 @@ function parseImport(){
   lines.forEach(function(ln, idx){
     ln = ln.trim();
     if (!ln) return;
+    if (/^\|/.test(ln)){
+      // Markdown 表格行：| Chunk | 中文释义 | 例句 |
+      var cells = ln.replace(/^\|/, "").replace(/\|\s*$/, "").split("|")
+                    .map(function(c){ return mdCell(c); });
+      var isSep = cells.every(function(c){ return c === "" || /^:?-{2,}:?$/.test(c); });
+      if (isSep) return;                                   // 跳过分隔行 | :--- |
+      var word = cells[0] || "";
+      if (/^(chunk|word|words|单词|语块)$/i.test(word)) return;  // 跳过表头行
+      if (!word){ err += "第" + (idx + 1) + "行没有单词\n"; return; }
+      out.push({word: word, cn: cells[1] || "", ex: cells[2] || ""});
+      return;
+    }
     if (ln.indexOf("|") < 0){ err += "第" + (idx + 1) + "行缺少分隔符 |：" + ln + "\n"; return; }
     var parts = ln.split("|");
-    var word = (parts[0] || "").trim();
-    if (!word){ err += "第" + (idx + 1) + "行没有单词\n"; return; }
-    out.push({word: word, cn: (parts[1] || "").trim(), ex: (parts[2] || "").trim()});
+    var word2 = (parts[0] || "").trim();
+    if (!word2){ err += "第" + (idx + 1) + "行没有单词\n"; return; }
+    out.push({word: word2, cn: (parts[1] || "").trim(), ex: (parts[2] || "").trim()});
   });
   return {out: out, err: err};
 }

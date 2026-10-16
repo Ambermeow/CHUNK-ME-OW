@@ -4,9 +4,8 @@ from datetime import date
 from sqlalchemy import and_, outerjoin
 from sqlalchemy.orm import Session
 
-from ..config import (EST_DAYS_DIVISOR, INTERVALS, MAX_NEW_PER_DAY,
-                      MAX_REVIEW_PER_DAY)
-from ..models import Word, WordProgress
+from ..config import INTERVALS, MAX_REVIEW_PER_DAY, NEW_WORDS_PER_DAY
+from ..models import UserSettings, Word, WordProgress
 
 # 阶段列名与「已完成该阶段后的展示档」
 _STAGE_ATTRS = ["s1", "s2", "s4", "s7", "s15"]
@@ -42,13 +41,21 @@ def _rows(db: Session, user_id: int):
     )
 
 
-def select_queue(db: Session, user_id: int, due: date):
+def effective_new_cap(db: Session, user_id: int) -> int:
+    """每日新词上限 N：用户账户设置优先，未设置时回落到环境变量默认。"""
+    s = db.get(UserSettings, user_id)
+    return (s.new_words_per_day if s and s.new_words_per_day else NEW_WORDS_PER_DAY)
+
+
+def select_queue(db: Session, user_id: int, due: date, new_cap: int | None = None):
     """返回 (review_words, new_words)，均为 Word 对象列表。
 
     - 回炉词（phase=daily）优先全进；
     - 周期词按 last_done + 第一个未完成阶段间隔 <= due 判到期，补足到 40；
-    - 新词（started=false）独立名额取 20，复习积压不得挤占。
+    - 新词（started=false）独立名额取 N（用户配置，缺省环境变量），复习积压不得挤占。
     """
+    if new_cap is None:
+        new_cap = effective_new_cap(db, user_id)
     daily: list[Word] = []
     cycle_due: list[Word] = []
     new_pool: list[Word] = []
@@ -73,10 +80,13 @@ def select_queue(db: Session, user_id: int, due: date):
     review = daily + [w for w in cycle_due if w.id not in daily_set][
         : max(0, MAX_REVIEW_PER_DAY - len(daily))
     ]
-    return review, new_pool[:MAX_NEW_PER_DAY]
+    return review, new_pool[:new_cap]
 
 
-def dashboard_stats(db: Session, user_id: int, next_review_count: int) -> dict:
+def dashboard_stats(db: Session, user_id: int, next_review_count: int,
+                    new_cap: int | None = None) -> dict:
+    if new_cap is None:
+        new_cap = effective_new_cap(db, user_id)
     total = started = mastered = cycling = daily = unstarted = 0
     for _, p in _rows(db, user_id):
         total += 1
@@ -91,7 +101,7 @@ def dashboard_stats(db: Session, user_id: int, next_review_count: int) -> dict:
         elif p.phase == "daily":
             daily += 1
     remaining = total - mastered
-    est_days = -(-remaining // EST_DAYS_DIVISOR)
+    est_days = -(-remaining // new_cap)
     return {
         "total": total,
         "started": started,
@@ -99,6 +109,7 @@ def dashboard_stats(db: Session, user_id: int, next_review_count: int) -> dict:
         "cycling": cycling,
         "daily": daily,
         "unstarted": unstarted,
-        "est_days60": est_days,
+        "est_days": est_days,
+        "new_words_per_day": new_cap,
         "next_review_count": next_review_count,
     }

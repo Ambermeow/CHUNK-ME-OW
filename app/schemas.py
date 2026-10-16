@@ -30,11 +30,13 @@ class TokenPair(BaseModel):
 class SettingsIn(BaseModel):
     llm_model: str | None = Field(default=None, max_length=128)
     api_key: str | None = Field(default=None, min_length=8, max_length=512)
+    new_words_per_day: int | None = Field(default=None, ge=1, le=100)
 
 
 class SettingsOut(BaseModel):
     llm_model: str | None
     api_key_masked: str | None
+    new_words_per_day: int
 
 
 class TodayItem(BaseModel):
@@ -80,7 +82,8 @@ class DashboardOut(BaseModel):
     cycling: int
     daily: int
     unstarted: int
-    est_days60: int
+    est_days: int
+    new_words_per_day: int
     next_review_count: int
 
 
