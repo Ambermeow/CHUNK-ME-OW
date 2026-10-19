@@ -216,6 +216,21 @@
   .preset-new{display:flex;gap:8px;padding:14px 20px 18px;border-top:1px solid var(--line)}
   .preset-new input{flex:1;width:auto;padding:10px 12px;font-size:14px}
   .preset-new .btn{flex:none;padding:10px 18px;font-size:14px}
+  /* —— 听音/看义默写切换 —— */
+  .mode-switch{display:flex;gap:8px;justify-content:center;margin:2px 0 10px}
+  .mode-btn{border:1.5px solid var(--line);background:var(--card);color:var(--muted);
+        border-radius:99px;padding:5px 16px;font-size:13px;cursor:pointer;font-family:inherit;
+        transition:all .12s}
+  .mode-btn.active{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .meaning-prompt{background:var(--accent-soft);border-left:3px solid var(--accent);
+        border-radius:8px;padding:12px 16px;margin:6px 0 4px;font-size:17px;color:#1e3a8a;text-align:center}
+  .meaning-prompt .lbl{font-size:12px;color:var(--accent);font-weight:600;display:block;margin-bottom:2px}
+  .slots{display:flex;flex-wrap:nowrap;gap:8px;margin:14px 0 4px;overflow-x:auto}
+  input.slot{flex:1;min-width:36px;width:auto;padding:10px 4px;font-size:15px;text-align:center;
+        border:1.5px solid var(--line);border-radius:10px;outline:none;font-family:inherit;
+        letter-spacing:.3px;transition:border-color .15s}
+  .slot:focus{border-color:var(--accent)}
+  .slot:disabled{background:var(--bg);color:var(--muted)}
 </style>
 </head>
 <body>
@@ -288,9 +303,15 @@
   </div>
   <div class="card" id="card">
     <div class="badge" id="roundBadge">第 1 轮</div>
+    <div class="mode-switch" id="modeSwitch">
+      <button class="mode-btn" data-mode="listen">听音默写</button>
+      <button class="mode-btn" data-mode="meaning">看义默写</button>
+    </div>
     <button class="play" id="btnPlay" title="播放发音">&#9654;</button>
     <div class="hint-box" id="hintBox" style="display:none"><span class="lbl">提示（例句）</span><span id="hintText"></span></div>
     <div class="rewrite" id="rewriteBox" style="display:none"><span class="lbl">正确拼写（请照抄一遍）</span><span class="ans" id="rewriteAns"></span></div>
+    <div class="meaning-prompt" id="meaningPrompt" style="display:none"><span class="lbl">中文释义</span><span id="meaningText"></span></div>
+    <div class="slots" id="slotsBox" style="display:none"></div>
     <input type="text" id="input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="输入你的拼写后回车">
     <div class="row">
       <button class="btn primary" id="btnSubmit">提交</button>
@@ -507,6 +528,7 @@ function loadSaved(){
 function save(){ try{ localStorage.setItem(queueKey(), JSON.stringify(state)); }catch(e){} }
 
 var idx = 0, answered = false, passedLast = false, phase = "first";
+var MODE = "listen";   // listen=听音默写 | meaning=看义默写
 
 function totalCoreNeed(){
   var errs = 0;
@@ -557,6 +579,7 @@ function setAudioSrc(u){
   var p = a.play(); if (p && p.catch) p.catch(function(){});
 }
 function play(){
+  if (MODE === "meaning") return;   // 看义默写不播放发音
   var q = cur();
   if (!q.audio_url || !/[0-9a-f]{12}\.mp3/.test(q.audio_url)){ return; }
   var cached = audioCache[q.correct];
@@ -574,7 +597,7 @@ function play(){
 function submit(){
   if (answered && passedLast) return;
   var q = cur(), r = curRec();
-  var val = $("input").value.trim();
+  var val = (MODE === "meaning") ? slotsValue() : $("input").value.trim();
   if (!val){ return; }
   answered = true;
   r.attempts += 1;
@@ -600,7 +623,8 @@ function submit(){
   fb.innerHTML = html;
   $("btnSubmit").style.display = "none";
   $("btnNext").style.display = "";
-  $("input").focus();
+  if (MODE === "meaning"){ $("slotsBox").children[0].focus(); }
+  else { $("input").focus(); }
   renderProgress();
   save();
 }
@@ -611,9 +635,63 @@ function loadWord(){
   $("fb").className = "fb";
   $("btnSubmit").style.display = ""; $("btnNext").style.display = "none";
   renderRoundUI();
-  play();
-  $("input").focus();
+  applyModeChrome();
+  if (MODE === "meaning"){ renderSlots(); $("slotsBox").children[0].focus(); }
+  else { play(); $("input").focus(); }
   renderProgress();
+}
+
+/* —— 看义默写：按答案词数渲染 N 个独立输入格 —— */
+function renderSlots(){
+  var box = $("slotsBox"); box.innerHTML = "";
+  var n = cur().correct.trim().split(/\s+/).length, i;
+  for (i = 0; i < n; i++){
+    var inp = document.createElement("input");
+    inp.type = "text"; inp.className = "slot";
+    inp.autocomplete = "off"; inp.autocapitalize = "off";
+    inp.setAttribute("spellcheck", "false");
+    inp.setAttribute("aria-label", "第 " + (i + 1) + " 个词");
+    inp.addEventListener("keydown", slotKeydown);
+    inp.addEventListener("input", function(){
+      if (answered && !passedLast){ var fb = $("fb"); fb.className = "fb"; fb.innerHTML = ""; }
+    });
+    box.appendChild(inp);
+  }
+}
+function slotKeydown(e){
+  var slots = $("slotsBox").children;
+  var i = Array.prototype.indexOf.call(slots, e.target);
+  if (e.key === " "){                        // 空格 → 跳到下一格
+    e.preventDefault();
+    if (i < slots.length - 1) slots[i + 1].focus();
+    return;
+  }
+  if (e.key === "Backspace" && e.target.value === "" && i > 0){
+    e.preventDefault(); slots[i - 1].focus(); return;
+  }
+  if (e.key === "Enter"){ e.preventDefault(); (answered && passedLast) ? next() : submit(); }
+}
+function slotsValue(){
+  var slots = $("slotsBox").children, parts = [], i;
+  for (i = 0; i < slots.length; i++) parts.push(slots[i].value.trim());
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+function applyModeChrome(){
+  var meaning = (MODE === "meaning");
+  $("btnPlay").style.display = meaning ? "none" : "";
+  $("input").style.display = meaning ? "none" : "";
+  $("meaningPrompt").style.display = meaning ? "" : "none";
+  $("slotsBox").style.display = meaning ? "" : "none";
+  if (meaning && cur()){
+    $("meaningText").textContent = cur().cn || "";
+    if (!$("slotsBox").children.length) renderSlots();
+  }
+}
+function updateModeUI(){
+  var btns = $("modeSwitch").children, i;
+  for (i = 0; i < btns.length; i++){
+    btns[i].classList.toggle("active", btns[i].getAttribute("data-mode") === MODE);
+  }
 }
 
 function next(){
@@ -683,6 +761,18 @@ $("input").addEventListener("input", function(){
   if (answered && !passedLast){ var fb = $("fb"); fb.className = "fb"; fb.innerHTML = ""; }
 });
 $("btnNext").addEventListener("click", next);
+$("modeSwitch").addEventListener("click", function(e){
+  var btn = e.target.closest ? e.target.closest(".mode-btn") : null;
+  if (!btn) return;
+  var m = btn.getAttribute("data-mode");
+  if (m === MODE) return;
+  MODE = m;
+  try{ localStorage.setItem("spelling_mode_" + UID, m); }catch(e2){}
+  updateModeUI();
+  if (QUEUE.length && $("card").style.display !== "none"){
+    if (!answered) loadWord(); else applyModeChrome();
+  }
+});
 
 function startFresh(){
   state = freshState(); save();
@@ -1044,6 +1134,8 @@ $("btnBackLists").addEventListener("click", function(){ showLists(); });
 
 function loadPractice(){
   state = null; phase = "first"; idx = 0; answered = false; passedLast = false;
+  MODE = localStorage.getItem("spelling_mode_" + UID) === "meaning" ? "meaning" : "listen";
+  updateModeUI();
   $("card").style.display = "";
   $("empty").style.display = "none";
   $("finish").style.display = "none";
