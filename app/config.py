@@ -57,5 +57,5 @@ CORS_ORIGINS = [o.strip() for o in os.getenv(
 # 业务常量（§2.3）
 INTERVALS = ["1", "2", "4", "7", "15"]
 MAX_REVIEW_PER_DAY = 40
-# 每日新词上限 N：环境变量为全局默认，用户可在设置里按账户覆盖（user_settings.new_words_per_day）
+# 每日新词上限 N：环境变量为全局默认，词库可独立覆盖（wordlists.new_words_per_day）
 NEW_WORDS_PER_DAY = int(os.getenv("NEW_WORDS_PER_DAY", "20"))

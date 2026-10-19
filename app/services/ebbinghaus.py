@@ -5,7 +5,7 @@ from sqlalchemy import and_, outerjoin
 from sqlalchemy.orm import Session
 
 from ..config import INTERVALS, MAX_REVIEW_PER_DAY, NEW_WORDS_PER_DAY
-from ..models import UserSettings, Word, WordProgress
+from ..models import Word, WordProgress, Wordlist
 
 # 阶段列名与「已完成该阶段后的展示档」
 _STAGE_ATTRS = ["s1", "s2", "s4", "s7", "s15"]
@@ -27,40 +27,41 @@ def word_status(p: WordProgress | None) -> str:
     return last
 
 
-def _rows(db: Session, user_id: int):
-    """当前用户全部词 + 进度（左连接），按加入顺序。"""
+def _rows(db: Session, user_id: int, wordlist_id: int):
+    """指定词库内当前用户全部词 + 进度（左连接），按加入顺序。"""
     return (
         db.query(Word, WordProgress)
         .outerjoin(
             WordProgress,
             and_(WordProgress.word_id == Word.id, WordProgress.user_id == user_id),
         )
-        .filter(Word.user_id == user_id)
+        .filter(Word.user_id == user_id, Word.wordlist_id == wordlist_id)
         .order_by(Word.id)
         .all()
     )
 
 
-def effective_new_cap(db: Session, user_id: int) -> int:
-    """每日新词上限 N：用户账户设置优先，未设置时回落到环境变量默认。"""
-    s = db.get(UserSettings, user_id)
-    return (s.new_words_per_day if s and s.new_words_per_day else NEW_WORDS_PER_DAY)
+def effective_new_cap(wordlist: Wordlist) -> int:
+    """每日新词上限 N：词库配置优先，未设置时回落到环境变量默认。"""
+    return wordlist.new_words_per_day or NEW_WORDS_PER_DAY
 
 
-def select_queue(db: Session, user_id: int, due: date, new_cap: int | None = None):
+def select_queue(db: Session, user_id: int, wordlist_id: int, due: date,
+                 new_cap: int | None = None):
     """返回 (review_words, new_words)，均为 Word 对象列表。
 
     - 回炉词（phase=daily）优先全进；
     - 周期词按 last_done + 第一个未完成阶段间隔 <= due 判到期，补足到 40；
-    - 新词（started=false）独立名额取 N（用户配置，缺省环境变量），复习积压不得挤占。
+    - 新词（started=false）独立名额取 N（词库配置，缺省环境变量），复习积压不得挤占。
     """
     if new_cap is None:
-        new_cap = effective_new_cap(db, user_id)
+        wl = db.get(Wordlist, wordlist_id)
+        new_cap = effective_new_cap(wl) if wl else NEW_WORDS_PER_DAY
     daily: list[Word] = []
     cycle_due: list[Word] = []
     new_pool: list[Word] = []
 
-    for word, p in _rows(db, user_id):
+    for word, p in _rows(db, user_id, wordlist_id):
         if p is None or not p.started:
             new_pool.append(word)
             continue
@@ -83,12 +84,13 @@ def select_queue(db: Session, user_id: int, due: date, new_cap: int | None = Non
     return review, new_pool[:new_cap]
 
 
-def dashboard_stats(db: Session, user_id: int, next_review_count: int,
-                    new_cap: int | None = None) -> dict:
+def dashboard_stats(db: Session, user_id: int, wordlist_id: int,
+                    next_review_count: int, new_cap: int | None = None) -> dict:
     if new_cap is None:
-        new_cap = effective_new_cap(db, user_id)
+        wl = db.get(Wordlist, wordlist_id)
+        new_cap = effective_new_cap(wl) if wl else NEW_WORDS_PER_DAY
     total = started = mastered = cycling = daily = unstarted = 0
-    for _, p in _rows(db, user_id):
+    for _, p in _rows(db, user_id, wordlist_id):
         total += 1
         if p is None or not p.started:
             unstarted += 1

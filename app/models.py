@@ -25,18 +25,30 @@ class UserSettings(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     llm_model: Mapped[str | None] = mapped_column(String(128))
     api_key_encrypted: Mapped[str | None] = mapped_column(String(512))
-    new_words_per_day: Mapped[int | None] = mapped_column(Integer)  # None = 用环境变量默认
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     user: Mapped[User] = relationship()
 
 
+class Wordlist(Base):
+    """词库：user_id 为 NULL 表示系统预制词库（供用户复制进账户）。"""
+    __tablename__ = "wordlists"
+    __table_args__ = (UniqueConstraint("user_id", "name"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), default="custom", nullable=False)  # custom | system
+    new_words_per_day: Mapped[int | None] = mapped_column(Integer)  # None = 用环境变量默认
+    created_on: Mapped[date] = mapped_column(Date, nullable=False)
+
+
 class Word(Base):
     __tablename__ = "words"
-    __table_args__ = (UniqueConstraint("user_id", "word"),)
+    __table_args__ = (UniqueConstraint("user_id", "wordlist_id", "word"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)  # NULL = 预制词
+    wordlist_id: Mapped[int] = mapped_column(ForeignKey("wordlists.id"), nullable=False, index=True)
     word: Mapped[str] = mapped_column(String(255), nullable=False)
     cn: Mapped[str | None] = mapped_column(String(512))
     ex: Mapped[str | None] = mapped_column(String(1024))
@@ -69,9 +81,10 @@ class WordProgress(Base):
 
 class PracticeSession(Base):
     __tablename__ = "practice_sessions"
-    __table_args__ = (UniqueConstraint("user_id", "date"),)
+    __table_args__ = (UniqueConstraint("user_id", "wordlist_id", "date"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    wordlist_id: Mapped[int] = mapped_column(ForeignKey("wordlists.id"), nullable=False, index=True)
     date: Mapped[date] = mapped_column(Date, nullable=False)
     total: Mapped[int] = mapped_column(Integer, default=0)
     one_shot: Mapped[int] = mapped_column(Integer, default=0)

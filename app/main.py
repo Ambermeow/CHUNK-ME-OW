@@ -13,7 +13,8 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import AUDIO_DIR, CORS_ORIGINS, DATA_DIR
-from .routers import (auth, dashboard, me, practice, vocab, voice, words)
+from .routers import (auth, dashboard, me, practice, vocab, voice, wordlists,
+                      words)
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -49,8 +50,8 @@ async def unhandled_exc(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"error": "internal_error"})
 
 
-for r in (auth.router, me.router, practice.router, dashboard.router,
-          words.router, vocab.router, voice.router):
+for r in (auth.router, me.router, wordlists.router, practice.router,
+          dashboard.router, words.router, vocab.router, voice.router):
     app.include_router(r, prefix="/api")
 
 

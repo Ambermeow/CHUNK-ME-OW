@@ -181,6 +181,41 @@
     .dash{width:46px}.dash.open{width:min(266px,84vw)}
     .dash-vert{left:12px}
   }
+  /* ---- 词库主页 ---- */
+  body.lists-mode{padding-left:0}
+  body.lists-mode .dash{display:none}
+  .back-link{border:none;background:none;color:var(--accent);font-size:13px;cursor:pointer;
+        padding:0;margin:0 0 8px;font-family:inherit;font-weight:600}
+  .back-link:hover{text-decoration:underline}
+  .wl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;margin-top:20px}
+  .wl-card{position:relative;background:var(--card);border:1px solid var(--line);border-radius:16px;
+        padding:20px;cursor:pointer;min-height:136px;display:flex;flex-direction:column;gap:6px;
+        transition:border-color .15s,box-shadow .15s}
+  .wl-card:hover{border-color:var(--accent);box-shadow:0 4px 14px rgba(37,99,235,.10)}
+  .wl-card-name{font-size:16px;font-weight:700;line-height:1.5;word-break:break-word;padding-right:54px}
+  .wl-card-stats{font-size:12.5px;color:var(--muted)}
+  .wl-card-n{font-size:12.5px;color:var(--accent);margin-top:auto}
+  .wl-card-acts{position:absolute;right:12px;top:12px;display:none;gap:6px}
+  .wl-card:hover .wl-card-acts{display:flex}
+  .wl-act{width:28px;height:28px;border:1px solid var(--line);background:var(--bg);border-radius:8px;
+        cursor:pointer;font-size:13px;color:var(--muted);line-height:1;padding:0}
+  .wl-act:hover{color:var(--accent);border-color:var(--accent)}
+  .wl-act.danger:hover{color:var(--err);border-color:var(--err)}
+  .wl-add{border:1.5px dashed var(--line);background:transparent;align-items:center;justify-content:center;
+        color:var(--muted);font-size:14px;box-shadow:none}
+  .wl-add:hover{border-color:var(--accent);color:var(--accent);box-shadow:none}
+  .wl-add .plus{font-size:34px;line-height:1;margin-bottom:6px}
+  .preset-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px dashed var(--line)}
+  .preset-row:last-child{border-bottom:none}
+  .preset-name{flex:1;font-size:14px;font-weight:600;word-break:break-word}
+  .preset-total{color:var(--muted);font-size:12.5px;flex:none}
+  .preset-add{flex:none;border:1.5px solid var(--accent);background:var(--card);color:var(--accent);
+        border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer;font-family:inherit}
+  .preset-add:hover{background:var(--accent);color:#fff}
+  .preset-add:disabled{opacity:.5;cursor:default}
+  .preset-new{display:flex;gap:8px;padding:14px 20px 18px;border-top:1px solid var(--line)}
+  .preset-new input{flex:1;width:auto;padding:10px 12px;font-size:14px}
+  .preset-new .btn{flex:none;padding:10px 18px;font-size:14px}
 </style>
 </head>
 <body>
@@ -202,11 +237,11 @@
 </div>
 
 <aside class="dash" id="dash">
-  <button class="dash-toggle" id="dashToggle" title="展开/收起全局看板">&#9776;</button>
-  <div class="dash-vert">全局看板</div>
+  <button class="dash-toggle" id="dashToggle" title="展开/收起词库看板">&#9776;</button>
+  <div class="dash-vert">词库看板</div>
   <div class="dash-body" id="dashBody">
-    <div class="dash-title">全局看板</div>
-    <div class="dash-sub">词库总览 · <span id="dashDate"></span></div>
+    <div class="dash-title">词库看板</div>
+    <div class="dash-sub"><span id="dashWlName"></span> · <span id="dashDate"></span></div>
     <div class="dash-item"><span class="l">总词数</span><span class="v total clickable" id="s-total" title="点击查看词库全表"></span></div>
     <div class="dash-item"><span class="l">我过过的词（已开始）</span><span class="v clickable" id="s-started" data-set="started"></span></div>
     <div class="dash-item mastered"><span class="l">已掌握</span><span class="v clickable" id="s-mastered" data-set="mastered"></span></div>
@@ -227,12 +262,21 @@
   </div>
 </aside>
 
-<div class="wrap">
+<div class="wrap" id="listsView" style="display:none">
+  <header>
+    <h1>我的词库</h1>
+    <div class="sub">选择一个词库开始今日练习 · 各词库进度与每日新词相互独立</div>
+  </header>
+  <div class="wl-grid" id="wlGrid"></div>
+</div>
+
+<div class="wrap" id="practiceView" style="display:none">
   <header>
     <div style="position:absolute;right:0">
       <button class="btn ghost" id="btnRestartDay" style="flex:none;padding:4px 14px;font-size:12.5px">重新开始今日</button>
     </div>
-    <h1>每日英语拼写练习</h1>
+    <button class="back-link" id="btnBackLists">&#8592; 返回词库列表</button>
+    <h1 id="pracTitle">每日英语拼写练习</h1>
     <div class="sub"><span id="hdrDate"></span> · 艾宾浩斯两阶段（当日过到会 → 1/2/4/7/15 周期）</div>
   </header>
   <div class="bar">
@@ -313,6 +357,37 @@
   </div>
 </div>
 
+<div class="wl-overlay" id="presetOverlay">
+  <div class="wl-panel">
+    <div class="wl-head">
+      <h3>添加词库</h3>
+      <div class="grp"><button class="wl-close" id="presetClose" title="关闭">&#10005;</button></div>
+    </div>
+    <div class="wl-list" id="presetList"><div class="wl-empty">加载中…</div></div>
+    <div class="preset-new">
+      <input type="text" id="newWlName" maxlength="64" placeholder="或输入名称，新建一个空词库">
+      <button class="btn primary" id="btnCreateWl">创建</button>
+    </div>
+  </div>
+</div>
+
+<div class="wl-overlay" id="renameOverlay">
+  <div class="wl-panel" style="width:min(420px,94vw)">
+    <div class="wl-head">
+      <h3>重命名词库</h3>
+      <div class="grp"><button class="wl-close" id="renameClose" title="关闭">&#10005;</button></div>
+    </div>
+    <div class="imp-body">
+      <input type="text" id="renameInput" maxlength="64" placeholder="词库名称">
+      <div class="auth-err" id="renameErr"></div>
+      <div class="imp-actions">
+        <button class="btn primary" id="renameSubmit">保存</button>
+      </div>
+      <p class="imp-tip2">同一账户内词库名唯一，若与已有名称重复将自动追加后缀。</p>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
 "use strict";
@@ -389,8 +464,12 @@ $("btnLogout").addEventListener("click", function(){ clearToks(); location.reloa
 
 /* ================= 全局数据 ================= */
 var QUEUE = [], DATE = "", STATS = {}, VOCAB = [], NEXT = null;
-var UID = "";
-function queueKey(){ return "spelling_practice_" + UID + "_" + DATE; }
+var UID = "", CUR_WL = null;
+function queueKey(){ return "spelling_practice_" + UID + "_" + (CUR_WL ? CUR_WL.id : "x") + "_" + DATE; }
+function wpath(p){
+  if (!CUR_WL) return p;
+  return p + (p.indexOf("?") >= 0 ? "&" : "?") + "wordlist_id=" + CUR_WL.id;
+}
 
 /* ================= 练习引擎（与原页面一致） ================= */
 var state = null;
@@ -559,7 +638,7 @@ function finish(){
 
 /* —— 完成页：查看详情 = POST /today/submit（幂等）+ 明细列表 —— */
 function resultsPayload(){
-  return {date: DATE, results: QUEUE.map(function(q){
+  return {date: DATE, wordlist_id: CUR_WL ? CUR_WL.id : null, results: QUEUE.map(function(q){
     var r = state.records[q.correct];
     return {word: q.correct, attempts: r.attempts, errors: r.errors,
             one_shot: r.errors.length === 0};
@@ -637,7 +716,7 @@ function renderDash(){
   $("s-next").classList.toggle("empty-v", nx == null);
 }
 function loadDashboard(){
-  return authFetch("/dashboard").then(function(j){ STATS = j; renderDash(); });
+  return authFetch(wpath("/dashboard")).then(function(j){ STATS = j; renderDash(); });
 }
 
 /* —— 每日新词量 N：写库并刷新词库 —— */
@@ -651,14 +730,14 @@ $("btnNewCap").addEventListener("click", function(){
     for (var k in state.records){ if (state.records[k].attempts > 0){ practiced = true; break; } }
   }
   var btn = this; btn.disabled = true; msg.textContent = "保存中…";
-  authFetch("/me/settings", {method:"PUT", body: JSON.stringify({new_words_per_day: n})})
-    .then(function(){ return loadDashboard(); })
+  authFetch("/wordlists/" + CUR_WL.id, {method:"PUT", body: JSON.stringify({new_words_per_day: n})})
+    .then(function(wl){ CUR_WL = wl; return loadDashboard(); })
     .then(function(){
       if (practiced){
         msg.textContent = "已保存：每日新词 " + n + " 个。今日已练习，新词量将从明日复习词库起生效。";
         return;
       }
-      return authFetch("/today").then(function(today){
+      return authFetch(wpath("/today")).then(function(today){
         DATE = today.date; QUEUE = today.items;
         localStorage.removeItem(queueKey());
         startFresh();
@@ -681,12 +760,12 @@ function openWL(mode){
   $("wlList").innerHTML = '<div class="wl-empty">加载中…</div>';
   $("wlSort").style.display = (wlMode === "all") ? "" : "none";
   if (wlMode === "next"){
-    authFetch("/next").then(function(j){ NEXT = j.items; renderWL(NEXT.map(function(x){
+    authFetch(wpath("/next")).then(function(j){ NEXT = j.items; renderWL(NEXT.map(function(x){
       return {id: null, word: x.word, cn: x.cn, added_on: "", status: WSTAT[x.word] || ""};
     })); });
   } else {
-    var path = "/words?sort=added_on&dir=" + (wlAsc ? "asc" : "desc") +
-               (wlMode === "all" ? "" : "&filter=" + wlMode);
+    var path = wpath("/words?sort=added_on&dir=" + (wlAsc ? "asc" : "desc") +
+               (wlMode === "all" ? "" : "&filter=" + wlMode));
     authFetch(path).then(function(list){
       if (wlMode === "all") VOCAB = list;
       renderWL(list);
@@ -809,7 +888,7 @@ $("impSubmit").addEventListener("click", function(){
   var btn = $("impSubmit"), res = $("impResult");
   btn.disabled = true; btn.textContent = "提交中…";
   res.className = "imp-result"; res.textContent = "正在写入词库并生成发音…";
-  authFetch("/vocab/import", {method:"POST", body: JSON.stringify({words: r.out})})
+  authFetch("/vocab/import", {method:"POST", body: JSON.stringify({wordlist_id: CUR_WL ? CUR_WL.id : null, words: r.out})})
     .then(function(j){
       res.className = "imp-result ok";
       res.innerHTML = "✅ 已写入 " + j.inserted + " 词，词库总数 " + j.total + "。" +
@@ -847,13 +926,135 @@ document.addEventListener("click", armAudio, true);
 document.addEventListener("keydown", armAudio, true);
 document.addEventListener("touchstart", armAudio, true);
 
-/* ================= 启动 ================= */
-function bootApp(){
-  Promise.all([authFetch("/auth/me"), authFetch("/today"), authFetch("/dashboard")])
+/* ================= 词库主页 ================= */
+function showLists(){
+  CUR_WL = null;
+  document.body.classList.add("lists-mode");
+  $("listsView").style.display = "";
+  $("practiceView").style.display = "none";
+  $("wlGrid").innerHTML = '<div class="wl-empty">加载中…</div>';
+  authFetch("/wordlists").then(renderListsGrid).catch(function(e){
+    if (e.status === 401){ showAuth(); return; }
+    $("wlGrid").innerHTML = '<div class="wl-empty">加载失败：' + esc(e.message) + '</div>';
+  });
+}
+function renderListsGrid(wls){
+  var grid = $("wlGrid"); grid.innerHTML = "";
+  wls.forEach(function(wl){
+    var c = document.createElement("div"); c.className = "wl-card";
+    c.innerHTML = '<div class="wl-card-acts">' +
+        '<button class="wl-act" title="改名">&#9998;</button>' +
+        '<button class="wl-act danger" title="删除">&#128465;</button></div>' +
+      '<div class="wl-card-name"></div>' +
+      '<div class="wl-card-stats">共 ' + wl.total + ' 词 · 已掌握 ' + wl.mastered + ' · 未学 ' + wl.unstarted + '</div>' +
+      '<div class="wl-card-n">每日新词 ' + wl.new_words_per_day + ' 个</div>';
+    c.children[1].textContent = wl.name;
+    c.addEventListener("click", function(){ enterWordlist(wl); });
+    c.children[0].children[0].addEventListener("click", function(e){ e.stopPropagation(); openRename(wl); });
+    c.children[0].children[1].addEventListener("click", function(e){ e.stopPropagation(); delWordlist(wl); });
+    grid.appendChild(c);
+  });
+  var add = document.createElement("div"); add.className = "wl-card wl-add";
+  add.innerHTML = '<div class="plus">&#65291;</div><div>添加词库</div>';
+  add.addEventListener("click", openPreset);
+  grid.appendChild(add);
+}
+function delWordlist(wl){
+  if (!confirm("确定删除词库「" + wl.name + "」？\n词库内所有词条与练习记录将被清除，且无法恢复。")) return;
+  authFetch("/wordlists/" + wl.id, {method:"DELETE"})
+    .then(function(){ showLists(); })
+    .catch(function(e){ alert("删除失败：" + e.message); });
+}
+var renameTarget = null;
+function openRename(wl){
+  renameTarget = wl;
+  $("renameInput").value = wl.name;
+  $("renameErr").textContent = "";
+  $("renameOverlay").classList.add("open");
+  setTimeout(function(){ $("renameInput").focus(); $("renameInput").select(); }, 60);
+}
+function doRename(){
+  if (!renameTarget) return;
+  var name = $("renameInput").value.trim();
+  if (!name){ $("renameErr").textContent = "词库名不能为空"; return; }
+  authFetch("/wordlists/" + renameTarget.id, {method:"PUT", body: JSON.stringify({name: name})})
+    .then(function(){ $("renameOverlay").classList.remove("open"); showLists(); })
+    .catch(function(e){ $("renameErr").textContent = e.message; });
+}
+$("renameSubmit").addEventListener("click", doRename);
+$("renameInput").addEventListener("keydown", function(e){ if (e.key === "Enter") doRename(); });
+$("renameClose").addEventListener("click", function(){ $("renameOverlay").classList.remove("open"); });
+$("renameOverlay").addEventListener("click", function(e){ if (e.target === this) this.classList.remove("open"); });
+
+function openPreset(){
+  $("presetOverlay").classList.add("open");
+  $("presetList").innerHTML = '<div class="wl-empty">加载中…</div>';
+  authFetch("/wordlists/system").then(function(ps){
+    var box = $("presetList"); box.innerHTML = "";
+    if (!ps.length){ box.innerHTML = '<div class="wl-empty">暂无系统预制词库</div>'; return; }
+    ps.forEach(function(p){
+      var row = document.createElement("div"); row.className = "preset-row";
+      row.innerHTML = '<span class="preset-name"></span><span class="preset-total">' + p.total + ' 词</span>' +
+                      '<button class="preset-add">&#65291; 添加</button>';
+      row.children[0].textContent = p.name;
+      var btn = row.children[2];
+      btn.addEventListener("click", function(){
+        btn.disabled = true; btn.textContent = "添加中…";
+        authFetch("/wordlists/" + p.id + "/add", {method:"POST"})
+          .then(function(wl){ $("presetOverlay").classList.remove("open"); enterWordlist(wl); })
+          .catch(function(e){ btn.disabled = false; btn.innerHTML = "&#65291; 添加"; alert("添加失败：" + e.message); });
+      });
+      box.appendChild(row);
+    });
+  }).catch(function(e){
+    $("presetList").innerHTML = '<div class="wl-empty">加载失败：' + esc(e.message) + '</div>';
+  });
+}
+function createNewWl(){
+  var name = $("newWlName").value.trim();
+  if (!name) return;
+  var btn = $("btnCreateWl"); btn.disabled = true;
+  authFetch("/wordlists", {method:"POST", body: JSON.stringify({name: name})})
+    .then(function(wl){
+      $("newWlName").value = "";
+      $("presetOverlay").classList.remove("open");
+      enterWordlist(wl);
+    })
+    .catch(function(e){ alert("创建失败：" + e.message); })
+    .finally(function(){ btn.disabled = false; });
+}
+$("btnCreateWl").addEventListener("click", createNewWl);
+$("newWlName").addEventListener("keydown", function(e){ if (e.key === "Enter") createNewWl(); });
+$("presetClose").addEventListener("click", function(){ $("presetOverlay").classList.remove("open"); });
+$("presetOverlay").addEventListener("click", function(e){ if (e.target === this) this.classList.remove("open"); });
+
+/* ================= 进入词库 → 练习视图 ================= */
+function enterWordlist(wl){
+  CUR_WL = wl;
+  document.body.classList.remove("lists-mode");
+  $("listsView").style.display = "none";
+  $("practiceView").style.display = "";
+  $("pracTitle").textContent = wl.name;
+  $("dashWlName").textContent = wl.name;
+  $("dash").classList.remove("open");
+  document.body.classList.remove("dash-open");
+  loadPractice();
+}
+$("btnBackLists").addEventListener("click", function(){ showLists(); });
+
+function loadPractice(){
+  state = null; phase = "first"; idx = 0; answered = false; passedLast = false;
+  $("card").style.display = "";
+  $("empty").style.display = "none";
+  $("finish").style.display = "none";
+  $("finishDetail").style.display = "none";
+  $("resumeBox").style.display = "none";
+  var bd = $("btnDetail"); bd.style.display = ""; bd.disabled = false; bd.textContent = "查看详情";
+  $("fill").style.width = "0%";
+  Promise.all([authFetch(wpath("/today")), authFetch(wpath("/dashboard"))])
     .then(function(rs){
-      UID = String(rs[0].id);
-      var today = rs[1];
-      DATE = today.date; STATS = rs[2];
+      var today = rs[0];
+      DATE = today.date; STATS = rs[1];
       $("hdrDate").textContent = DATE; $("dashDate").textContent = DATE;
       QUEUE = today.items;
       renderDash();
@@ -877,6 +1078,17 @@ function bootApp(){
       if (e.status === 401){ showAuth(); return; }
       alert("加载失败：" + e.message);
     });
+}
+
+/* ================= 启动 ================= */
+function bootApp(){
+  authFetch("/auth/me").then(function(me){
+    UID = String(me.id);
+    showLists();
+  }).catch(function(e){
+    if (e.status === 401){ showAuth(); return; }
+    alert("加载失败：" + e.message);
+  });
 }
 
 if (tok()){ setAuthMode("login"); bootApp(); }

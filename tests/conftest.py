@@ -49,6 +49,13 @@ def register(client, email: str, password: str = "password123"):
     return r.json(), {"Authorization": "Bearer " + r.json()["access_token"]}
 
 
+def first_wl(client, hdr) -> dict:
+    """取账户下第一个词库（注册时自动创建的默认词库）。"""
+    wls = client.get("/api/wordlists", headers=hdr).json()
+    assert wls, "账户下应至少有默认词库"
+    return wls[0]
+
+
 @pytest.fixture(scope="session")
 def user_a(client):
     return register(client, "a@test.local")

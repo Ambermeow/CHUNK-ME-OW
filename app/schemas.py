@@ -30,13 +30,37 @@ class TokenPair(BaseModel):
 class SettingsIn(BaseModel):
     llm_model: str | None = Field(default=None, max_length=128)
     api_key: str | None = Field(default=None, min_length=8, max_length=512)
-    new_words_per_day: int | None = Field(default=None, ge=1, le=100)
 
 
 class SettingsOut(BaseModel):
     llm_model: str | None
     api_key_masked: str | None
+
+
+class WordlistCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+
+
+class WordlistUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=64)
+    new_words_per_day: int | None = Field(default=None, ge=1, le=100)
+
+
+class WordlistOut(BaseModel):
+    id: int
+    name: str
+    kind: str
     new_words_per_day: int
+    total: int
+    mastered: int
+    unstarted: int
+    created_on: date
+
+
+class PresetOut(BaseModel):
+    id: int
+    name: str
+    total: int
 
 
 class TodayItem(BaseModel):
@@ -65,6 +89,7 @@ class SubmitResult(BaseModel):
 
 class SubmitIn(BaseModel):
     date: date
+    wordlist_id: int | None = None
     results: list[SubmitResult] = Field(min_length=1, max_length=MAX_SUBMIT_RESULTS)
 
 
@@ -113,6 +138,7 @@ class ImportWord(BaseModel):
 
 
 class ImportIn(BaseModel):
+    wordlist_id: int | None = None
     words: list[ImportWord] = Field(min_length=1, max_length=MAX_IMPORT_WORDS)
 
 

@@ -7,6 +7,7 @@ from ..database import get_db
 from ..deps import get_current_user
 from ..models import (PracticeSession, SessionItem, User, Word, WordProgress)
 from ..schemas import HistoryPoint, WordOut
+from ..services import wordlists as wl_svc
 from ..services.ebbinghaus import _rows, word_status
 
 router = APIRouter(tags=["words"])
@@ -18,12 +19,14 @@ _FILTERS = {"all", "started", "mastered", "cycling", "daily", "unstarted"}
 def list_words(sort: str = Query("added_on", pattern="^(added_on|word)$"),
                dirn: str = Query("desc", alias="dir", pattern="^(asc|desc)$"),
                filter: str = Query("all", alias="filter"),
+               wordlist_id: int | None = Query(default=None),
                user: User = Depends(get_current_user),
                db: Session = Depends(get_db)):
     if filter not in _FILTERS:
         raise HTTPException(status_code=422, detail="非法 filter")
+    wl = wl_svc.resolve(db, user.id, wordlist_id)
     out = []
-    for word, p in _rows(db, user.id):
+    for word, p in _rows(db, user.id, wl.id):
         st = word_status(p)
         if filter == "started" and not (p and p.started):
             continue

@@ -1,7 +1,7 @@
 """验收 2/3/4/5/6：选词规则、提交后状态、实时看板、音频、记忆曲线。"""
 from datetime import date, timedelta
 
-from conftest import register
+from conftest import first_wl, register
 
 from app.database import SessionLocal
 from app.services.ebbinghaus import select_queue, word_status
@@ -48,7 +48,8 @@ def test_submit_status_rules(client):
     assert _status_map(client, hdr)["ticket"] == "REP"
     with SessionLocal() as db:
         uid = client.get("/api/auth/me", headers=hdr).json()["id"]
-        review, _new = select_queue(db, uid, today + timedelta(days=1))
+        wl_id = first_wl(client, hdr)["id"]
+        review, _new = select_queue(db, uid, wl_id, today + timedelta(days=1))
         assert "ticket" in [w.word for w in review]
 
     # 一遍过：last_done=今天
@@ -69,6 +70,7 @@ def test_selection_quotas(client):
     """验收2：回炉优先全进、到期按 last_done+间隔、40/20 独立配额。"""
     _, hdr = register(client, "s2@example.com")
     uid = client.get("/api/auth/me", headers=hdr).json()["id"]
+    wl_id = first_wl(client, hdr)["id"]
     today = date.today()
 
     many = [f"w{i:03d}" for i in range(50)]
@@ -76,7 +78,7 @@ def test_selection_quotas(client):
     _submit(client, hdr, today - timedelta(days=1), [(w, 1, []) for w in many])
     # 50 个周期词今天全部到期（间隔1）→ 复习上限 40
     with SessionLocal() as db:
-        review, new = select_queue(db, uid, today)
+        review, new = select_queue(db, uid, wl_id, today)
         assert len(review) == 40 and len(new) == 0
 
     # 5 个回炉词优先全进 + 35 个周期词补足 40；新词名额独立 20
@@ -84,7 +86,7 @@ def test_selection_quotas(client):
     fresh = [f"n{i:03d}" for i in range(25)]
     _import(client, hdr, fresh)
     with SessionLocal() as db:
-        review, new = select_queue(db, uid, today + timedelta(days=1))
+        review, new = select_queue(db, uid, wl_id, today + timedelta(days=1))
         daily_words = {w for w in many[:5]}
         assert daily_words.issubset({w.word for w in review})
         assert len(review) == 40
@@ -99,9 +101,9 @@ def test_selection_quotas(client):
         p.s1 = True                              # 下一档间隔 2
         db.commit()
         with SessionLocal() as db2:
-            review, _ = select_queue(db2, uid, today + timedelta(days=1))
+            review, _ = select_queue(db2, uid, wl_id, today + timedelta(days=1))
             assert "w010" not in [x.word for x in review]
-            review, _ = select_queue(db2, uid, today + timedelta(days=2))
+            review, _ = select_queue(db2, uid, wl_id, today + timedelta(days=2))
             assert "w010" in [x.word for x in review]
 
 
@@ -156,29 +158,35 @@ def test_memory_curve(client):
 
 
 def test_new_words_per_day_config(client):
-    """每日新词 N：用户配置写库生效，选词/看板估算随 N 变化；非法值拒绝。"""
+    """每日新词 N：按词库配置写库生效，选词/看板估算随 N 变化；非法值拒绝。"""
     _, hdr = register(client, "s7@example.com")
+    wl_id = first_wl(client, hdr)["id"]
     _import(client, hdr, [f"nwc{i}" for i in range(10)])
 
-    r = client.put("/api/me/settings", headers=hdr, json={"new_words_per_day": 3})
+    r = client.put(f"/api/wordlists/{wl_id}", headers=hdr,
+                   json={"new_words_per_day": 3})
     assert r.status_code == 200 and r.json()["new_words_per_day"] == 3
 
-    items = client.get("/api/today", headers=hdr).json()["items"]
+    items = client.get("/api/today", headers=hdr,
+                       params={"wordlist_id": wl_id}).json()["items"]
     assert len(items) == 3  # 全是新词，无复习 → 恰好 N 个
 
-    dash = client.get("/api/dashboard", headers=hdr).json()
+    dash = client.get("/api/dashboard", headers=hdr,
+                      params={"wordlist_id": wl_id}).json()
     assert dash["new_words_per_day"] == 3
     assert dash["est_days"] == 4  # ceil(10 / 3)
 
     # 非法值
-    assert client.put("/api/me/settings", headers=hdr,
+    assert client.put(f"/api/wordlists/{wl_id}", headers=hdr,
                       json={"new_words_per_day": 0}).status_code == 422
-    assert client.put("/api/me/settings", headers=hdr,
+    assert client.put(f"/api/wordlists/{wl_id}", headers=hdr,
                       json={"new_words_per_day": 101}).status_code == 422
 
     # 改回 5 → 今日队列立即变 5
-    client.put("/api/me/settings", headers=hdr, json={"new_words_per_day": 5})
-    assert len(client.get("/api/today", headers=hdr).json()["items"]) == 5
+    client.put(f"/api/wordlists/{wl_id}", headers=hdr,
+               json={"new_words_per_day": 5})
+    assert len(client.get("/api/today", headers=hdr,
+                          params={"wordlist_id": wl_id}).json()["items"]) == 5
 
 
 def test_no_llm_calls():

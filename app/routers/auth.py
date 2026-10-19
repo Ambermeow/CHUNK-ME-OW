@@ -1,12 +1,15 @@
 """注册 / 登录 / 刷新（§5、§8）。限速防爆破，密码不落明文。"""
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import check_auth_rate_limit, get_current_user
-from ..models import User, UserSettings
+from ..models import User, UserSettings, Wordlist
 from ..schemas import LoginIn, RefreshIn, RegisterIn, TokenPair
 from ..security import create_token, decode_token, hash_password, verify_password
+from ..services.wordlists import DEFAULT_NAME
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -26,6 +29,8 @@ def register(body: RegisterIn, request: Request, db: Session = Depends(get_db)):
     db.add(user)
     db.flush()
     db.add(UserSettings(user_id=user.id))
+    db.add(Wordlist(user_id=user.id, name=DEFAULT_NAME, kind="custom",
+                    created_on=date.today()))
     db.commit()
     return _issue(user.id)
 

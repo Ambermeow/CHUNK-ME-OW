@@ -7,7 +7,6 @@ from ..deps import get_current_user
 from ..models import User, UserSettings
 from ..schemas import SettingsIn, SettingsOut
 from ..security import encrypt_str, mask_api_key
-from ..services.ebbinghaus import effective_new_cap
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -31,8 +30,7 @@ def get_settings(user: User = Depends(get_current_user), db: Session = Depends(g
             masked = mask_api_key(decrypt_str(s.api_key_encrypted))
         except Exception:
             masked = "sk-****"
-    return SettingsOut(llm_model=s.llm_model, api_key_masked=masked,
-                       new_words_per_day=effective_new_cap(db, user.id))
+    return SettingsOut(llm_model=s.llm_model, api_key_masked=masked)
 
 
 @router.put("/settings", response_model=SettingsOut)
@@ -45,8 +43,5 @@ def put_settings(body: SettingsIn, user: User = Depends(get_current_user),
     if body.api_key:
         s.api_key_encrypted = encrypt_str(body.api_key)
         masked = mask_api_key(body.api_key)
-    if body.new_words_per_day is not None:
-        s.new_words_per_day = body.new_words_per_day
     db.commit()
-    return SettingsOut(llm_model=s.llm_model, api_key_masked=masked,
-                       new_words_per_day=effective_new_cap(db, user.id))
+    return SettingsOut(llm_model=s.llm_model, api_key_masked=masked)

@@ -8,11 +8,13 @@ from ..models import (PracticeSession, SessionItem, Word, WordProgress)
 from .ebbinghaus import _STAGE_ATTRS, word_status
 
 
-def apply_results(db: Session, user_id: int, day: date, results: list) -> dict:
+def apply_results(db: Session, user_id: int, wordlist_id: int, day: date,
+                  results: list) -> dict:
     """results: [SubmitResult]。一遍过推进一档；有 errors 一律回 daily 清零。"""
     words = (
         db.query(Word)
-        .filter(Word.user_id == user_id, Word.word.in_([r.word for r in results]))
+        .filter(Word.user_id == user_id, Word.wordlist_id == wordlist_id,
+                Word.word.in_([r.word for r in results]))
         .all()
     )
     wmap = {w.word: w for w in words}
@@ -66,14 +68,16 @@ def apply_results(db: Session, user_id: int, day: date, results: list) -> dict:
 
         items_payload.append((word, r, one_shot, status_before, word_status(p)))
 
-    # 会话 upsert（同日重复提交覆盖明细，幂等）
+    # 会话 upsert（同词库同日重复提交覆盖明细，幂等）
     session = (
         db.query(PracticeSession)
-        .filter(PracticeSession.user_id == user_id, PracticeSession.date == day)
+        .filter(PracticeSession.user_id == user_id,
+                PracticeSession.wordlist_id == wordlist_id,
+                PracticeSession.date == day)
         .one_or_none()
     )
     if session is None:
-        session = PracticeSession(user_id=user_id, date=day)
+        session = PracticeSession(user_id=user_id, wordlist_id=wordlist_id, date=day)
         db.add(session)
         db.flush()
     else:
