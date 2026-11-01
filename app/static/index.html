@@ -58,6 +58,27 @@
   .stat span{font-size:12px;color:var(--muted)}
   .resume{background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:14px 16px;
           margin-bottom:16px;font-size:14px;color:#92400e}
+  /* —— 看义读音（语音评分）—— */
+  .speak-area{margin:14px 0 4px;text-align:center}
+  .speak-btn.big{padding:14px 36px;font-size:16px;border-width:2px}
+  .speak-btn{border:1.5px dashed var(--line);background:var(--bg);color:var(--muted);
+    border-radius:12px;padding:9px 22px;font-size:14px;cursor:pointer;font-family:inherit;transition:all .15s}
+  .speak-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .speak-btn.rec{border-color:var(--err);color:var(--err);background:var(--err-soft);animation:speakPulse 1.2s infinite}
+  .speak-btn:disabled{opacity:.5;cursor:default}
+  @keyframes speakPulse{0%,100%{opacity:1}50%{opacity:.55}}
+  .speak-fb{margin-top:12px;border-radius:12px;padding:12px 14px;background:var(--bg);border:1px solid var(--line);font-size:13.5px}
+  .speak-verdict{font-weight:700;font-size:15px;margin-bottom:8px}
+  .speak-verdict.ok{color:var(--ok)}
+  .speak-verdict.bad{color:var(--err)}
+  .speak-verdict.speak-rec{color:var(--err);animation:speakPulse 1.2s infinite}
+  .speak-score{font-weight:400;font-size:12px;color:var(--muted);margin-left:6px}
+  .speak-target{line-height:2.1}
+  .sw{display:inline-block;padding:1px 8px;border-radius:8px;margin:2px 3px 2px 0;font-weight:600}
+  .sw.w-ok{background:var(--ok-soft);color:#065f46}
+  .sw.w-bad{background:var(--err-soft);color:#991b1b;text-decoration:line-through}
+  .sw.w-art{background:var(--card);color:var(--muted);border:1px dashed var(--line)}
+  .speak-heard{margin-top:8px;color:var(--muted);font-size:12.5px}
   /* ---- 左侧全局看板 ---- */
   body{padding-left:58px;transition:padding-left .22s ease}
   body.dash-open{padding-left:266px}
@@ -216,6 +237,15 @@
   .preset-new{display:flex;gap:8px;padding:14px 20px 18px;border-top:1px solid var(--line)}
   .preset-new input{flex:1;width:auto;padding:10px 12px;font-size:14px}
   .preset-new .btn{flex:none;padding:10px 18px;font-size:14px}
+  /* 预制词库并列卡片 */
+  #presetList{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+        gap:12px;padding:16px 20px;align-content:start}
+  #presetList .wl-empty{grid-column:1/-1}
+  .preset-row{display:flex;flex-direction:column;align-items:stretch;gap:8px;
+        border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--bg)}
+  .preset-row:last-child{border-bottom:1px solid var(--line)}
+  .preset-name{font-size:14px;font-weight:600;word-break:break-word;line-height:1.6}
+  .preset-total{color:var(--muted);font-size:12.5px}
   /* —— 听音/看义默写切换 —— */
   .mode-switch{display:flex;gap:8px;justify-content:center;margin:2px 0 10px}
   .mode-btn{border:1.5px solid var(--line);background:var(--card);color:var(--muted);
@@ -306,6 +336,7 @@
     <div class="mode-switch" id="modeSwitch">
       <button class="mode-btn" data-mode="listen">听音默写</button>
       <button class="mode-btn" data-mode="meaning">看义默写</button>
+      <button class="mode-btn" data-mode="speak">看义读音</button>
     </div>
     <button class="play" id="btnPlay" title="播放发音">&#9654;</button>
     <div class="hint-box" id="hintBox" style="display:none"><span class="lbl">提示（例句）</span><span id="hintText"></span></div>
@@ -317,6 +348,10 @@
       <button class="btn primary" id="btnSubmit">提交</button>
       <button class="btn ghost" id="btnNext" style="display:none">下一个</button>
     </div>
+    <div class="speak-area" id="speakArea" style="display:none">
+      <button class="speak-btn big" id="btnSpeak" type="button">&#127908; 开始朗读</button>
+    </div>
+    <div class="speak-fb" id="speakFb" style="display:none"></div>
     <div class="fb" id="fb"></div>
   </div>
   <div class="empty" id="empty" style="display:none">今日无练习词，休息一下吧。</div>
@@ -447,6 +482,23 @@ function authFetch(path, opts){
     return resp.json();
   });
 }
+/* 同 authFetch 的 401 自动刷新重试，但返回原始 Response 且不设默认 Content-Type
+   （音频 blob 拉取、FormData 上传需要） */
+function authFetchRaw(path, opts){
+  opts = opts || {};
+  opts.headers = Object.assign({}, opts.headers || {});
+  if (tok()) opts.headers["Authorization"] = "Bearer " + tok();
+  return fetch(API + path, opts).then(function(resp){
+    if (resp.status === 401 && localStorage.getItem(RT)){
+      return tryRefresh().then(function(ok){
+        if (!ok){ showAuth(); throw new Error("登录已过期，请重新登录"); }
+        opts.headers["Authorization"] = "Bearer " + tok();
+        return fetch(API + path, opts);
+      });
+    }
+    return resp;
+  });
+}
 function tryRefresh(){
   return fetch(API + "/auth/refresh", {
     method:"POST", headers:{"Content-Type":"application/json"},
@@ -528,7 +580,7 @@ function loadSaved(){
 function save(){ try{ localStorage.setItem(queueKey(), JSON.stringify(state)); }catch(e){} }
 
 var idx = 0, answered = false, passedLast = false, phase = "first";
-var MODE = "listen";   // listen=听音默写 | meaning=看义默写
+var MODE = "listen";   // listen=听音默写 | meaning=看义默写 | speak=看义读音
 
 function totalCoreNeed(){
   var errs = 0;
@@ -572,14 +624,14 @@ function renderRoundUI(){
 /* —— 音频：带 Bearer 拉取 blob 并缓存 —— */
 var audioCache = {};
 function fetchAudioBlob(path){
-  return fetch(API + path, {headers:{"Authorization":"Bearer " + (tok() || "")}});
+  return authFetchRaw(path, {});   // token 过期自动刷新，避免长会话后"没有音频"
 }
 function setAudioSrc(u){
   var a = $("player"); a.src = u;
   var p = a.play(); if (p && p.catch) p.catch(function(){});
 }
 function play(){
-  if (MODE === "meaning") return;   // 看义默写不播放发音
+  if (MODE !== "listen") return;   // 只有听音默写播放发音，避免泄题
   var q = cur();
   if (!q.audio_url || !/[0-9a-f]{12}\.mp3/.test(q.audio_url)){ return; }
   var cached = audioCache[q.correct];
@@ -591,55 +643,241 @@ function play(){
     var u = URL.createObjectURL(blob);
     audioCache[q.correct] = u;
     setAudioSrc(u);
-  }).catch(function(){});
+  }).catch(function(err){ console.error("发音加载失败:", err); });
 }
 
-function submit(){
-  if (answered && passedLast) return;
-  var q = cur(), r = curRec();
-  var val = (MODE === "meaning") ? slotsValue() : $("input").value.trim();
-  if (!val){ return; }
+/* 共享判定：三种背诵模式共用（第 1 轮判定 / 滚动复审计数），并切换 提交→下一个 */
+function applyJudge(ok, errVal){
+  var r = curRec(), fb = $("fb");
   answered = true;
   r.attempts += 1;
-  var ok = (norm(val) === norm(q.correct));   // 严格相等；大小写/空格/标点不计较
-  var fb = $("fb");
-  var html = '<span class="lbl">' + (ok ? "✔ 正确" : "✘ 拼错") + "</span><br>你的拼写：" + esc(val) +
-             "<br>正确拼写：<b>" + esc(q.correct) + "</b>" +
-             (q.cn ? "<br>中文释义：" + esc(q.cn) : "");
   if (phase === "first"){
     r.judged = true;
     if (ok){ r.need = 0; r.met = 0; r.pass = true; fb.className = "fb ok"; }
-    else { r.need = 2; r.met = 0; r.pass = false; r.errors.push(val); fb.className = "fb err"; }
+    else { r.need = 2; r.met = 0; r.pass = false; r.errors.push(errVal); fb.className = "fb err"; }
   } else {
     if (ok){
       r.met += 1; r.need = Math.max(0, r.need - 1);
       if (r.need === 0){ r.pass = true; }
       fb.className = "fb ok";
     } else {
-      r.need += 2; r.errors.push(val); fb.className = "fb err";
+      r.need += 2; r.errors.push(errVal); fb.className = "fb err";
     }
   }
   passedLast = true;
-  fb.innerHTML = html;
   $("btnSubmit").style.display = "none";
   $("btnNext").style.display = "";
-  if (MODE === "meaning"){ $("slotsBox").children[0].focus(); }
-  else { $("input").focus(); }
   renderProgress();
   save();
 }
 
+function submit(){
+  if (answered && passedLast) return;
+  var q = cur();
+  var val = (MODE === "meaning") ? slotsValue() : $("input").value.trim();
+  if (!val){ return; }
+  var ok = (norm(val) === norm(q.correct));   // 严格相等；大小写/空格/标点不计较
+  $("fb").innerHTML = '<span class="lbl">' + (ok ? "✔ 正确" : "✘ 拼错") + "</span><br>你的拼写：" + esc(val) +
+             "<br>正确拼写：<b>" + esc(q.correct) + "</b>" +
+             (q.cn ? "<br>中文释义：" + esc(q.cn) : "");
+  applyJudge(ok, val);
+  if (MODE === "meaning"){ $("slotsBox").children[0].focus(); }
+  else { $("input").focus(); }
+}
+
 function loadWord(){
   answered = false; passedLast = false;
+  resetSpeak();
   $("input").value = ""; $("input").disabled = false;
   $("fb").className = "fb";
   $("btnSubmit").style.display = ""; $("btnNext").style.display = "none";
   renderRoundUI();
   applyModeChrome();
   if (MODE === "meaning"){ renderSlots(); $("slotsBox").children[0].focus(); }
+  else if (MODE === "speak"){ scheduleSpeakCountdown(); }
   else { play(); $("input").focus(); }
   renderProgress();
 }
+
+/* ============ 看义读音模式：录音 → /api/speech/score → 逐词反馈 + 判定 ============ */
+var speakState = {rec: null, chunks: [], stream: null, timer: null, busy: false, cd: null};
+var SPEAK_MAX_SEC = 8;   /* 录音最长秒数：到点自动停止并评分 */
+var SPEAK_CD_SEC = 3;    /* 进入看义读音/换词后的自动录音倒计时秒数 */
+
+function escSpeak(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
+function stopSpeakStream(){
+  if (speakState.stream){ speakState.stream.getTracks().forEach(function(t){ t.stop(); }); }
+  speakState.stream = null;
+}
+function clearSpeakTimer(){
+  if (speakState.timer){ clearTimeout(speakState.timer); speakState.timer = null; }
+}
+function clearSpeakCd(){
+  if (speakState.cd){ clearInterval(speakState.cd); speakState.cd = null; }
+}
+/* 倒计时 3 秒自动开录：切到看义读音 / 每换一个词都触发 */
+function scheduleSpeakCountdown(){
+  clearSpeakCd();
+  var n = SPEAK_CD_SEC, b = $("btnSpeak");
+  var tick = function(){
+    if (MODE !== "speak" || $("card").style.display === "none"){ clearSpeakCd(); return; }
+    if (n <= 0){
+      clearSpeakCd();
+      startSpeak();
+      return;
+    }
+    b.innerHTML = "&#9203; " + n + " 秒后自动录音…";
+    var box = $("speakFb");
+    box.innerHTML = '<div class="speak-verdict speak-rec">&#9203; ' + n + ' 秒后自动开始录音，请准备朗读</div>';
+    box.style.display = "block";
+    n -= 1;
+  };
+  tick();
+  speakState.cd = setInterval(tick, 1000);
+}
+function resetSpeak(){
+  clearSpeakCd();
+  clearSpeakTimer();
+  if (speakState.rec && speakState.rec.state === "recording"){
+    try { speakState.rec.stop(); } catch(e){}
+  }
+  stopSpeakStream();
+  speakState.rec = null; speakState.chunks = []; speakState.busy = false;
+  var b = $("btnSpeak");
+  b.disabled = false; b.classList.remove("rec"); b.innerHTML = "&#127908; 开始朗读";
+  $("speakFb").style.display = "none"; $("speakFb").innerHTML = "";
+}
+function showSpeakErr(msg){
+  var box = $("speakFb");
+  box.innerHTML = '<div class="speak-verdict bad">&#10007; ' + escSpeak(msg) + '</div>';
+  box.style.display = "block";
+}
+function showSpeakRecHint(){
+  var box = $("speakFb");
+  box.innerHTML = '<div class="speak-verdict speak-rec">&#9679; 正在录音，请开始朗读'
+    + '<span class="speak-score">最长 ' + SPEAK_MAX_SEC + ' 秒自动评分，也可再点按钮提前结束</span></div>';
+  box.style.display = "block";
+}
+/* getUserMedia 加超时：无音频设备/权限卡死时不挂起，给出可见反馈 */
+function gumWithTimeout(constraints, ms){
+  return new Promise(function(resolve, reject){
+    var done = false;
+    var t = setTimeout(function(){
+      if (!done){ done = true; reject(new Error("gum_timeout")); }
+    }, ms);
+    navigator.mediaDevices.getUserMedia(constraints).then(function(s){
+      if (!done){ done = true; clearTimeout(t); resolve(s); }
+      else { s.getTracks().forEach(function(x){ x.stop(); }); }
+    }, function(e){
+      if (!done){ done = true; clearTimeout(t); reject(e); }
+    });
+  });
+}
+function renderSpeakResult(j){
+  var box = $("speakFb");
+  var html = '<div class="speak-verdict ' + (j.pass ? "ok" : "bad") + '">'
+    + (j.pass ? "&#10003; 背对了" : "&#10007; 再试试")
+    + ' <span class="speak-score">命中 ' + Math.round((j.score || 0) * 100) + '%</span></div>';
+  html += '<div class="speak-target">' + (j.details || []).map(function(d){
+    var cls = d.status === "ok" ? "w-ok" : (d.status === "ignored_article" ? "w-art" : "w-bad");
+    return '<span class="sw ' + cls + '">' + escSpeak(d.word) + '</span>';
+  }).join("") + '</div>';
+  html += '<div class="speak-heard">识别为：' + (escSpeak(j.recognized) || "（未识别到内容）") + '</div>';
+  box.innerHTML = html; box.style.display = "block";
+}
+async function startSpeak(){
+  var b = $("btnSpeak");
+  speakState.busy = true;
+  $("speakFb").style.display = "none";
+  b.disabled = true; b.innerHTML = "正在请求麦克风…";
+  var stream;
+  try { stream = await gumWithTimeout({audio: true}, 10000); }
+  catch(e){
+    console.error("getUserMedia 失败:", e);
+    speakState.busy = false; b.disabled = false; b.innerHTML = "&#127908; 开始朗读";
+    if (e && e.message === "gum_timeout") showSpeakErr("麦克风无响应：请检查麦克风是否被其他应用占用或未连接，然后重试");
+    else if (e && (e.name === "NotAllowedError" || e.name === "SecurityError")) showSpeakErr("麦克风权限被拒绝：请在浏览器地址栏/设置中允许本站使用麦克风后重试");
+    else showSpeakErr("无法使用麦克风：" + (e && e.name ? e.name : "设备不可用"));
+    return;
+  }
+  speakState.stream = stream;
+  var mime = "", rec;
+  try {
+    if (!window.MediaRecorder) throw new Error("no_mediarecorder");
+    if (MediaRecorder.isTypeSupported("audio/webm")) mime = "audio/webm";
+    else if (MediaRecorder.isTypeSupported("audio/mp4")) mime = "audio/mp4";
+    rec = new MediaRecorder(stream, mime ? {mimeType: mime} : undefined);
+    rec.start();
+  } catch(e){
+    console.error("录音初始化失败:", e);
+    speakState.busy = false; stopSpeakStream();
+    b.disabled = false; b.innerHTML = "&#127908; 开始朗读";
+    showSpeakErr(e.message === "no_mediarecorder" ? "当前浏览器不支持录音（MediaRecorder）" : "启动录音失败：" + (e.name || e.message));
+    return;
+  }
+  speakState.rec = rec; speakState.chunks = [];
+  rec.ondataavailable = function(e){ if (e.data && e.data.size) speakState.chunks.push(e.data); };
+  rec.onstop = function(){
+    clearSpeakTimer();
+    stopSpeakStream();
+    if (!speakState.chunks.length){
+      speakState.busy = false;
+      b.disabled = false; b.classList.remove("rec"); b.innerHTML = "&#127908; 开始朗读";
+      showSpeakErr("未采集到录音内容，请再点击一次重试");
+      return;
+    }
+    uploadSpeak(rec.mimeType || mime);
+  };
+  speakState.busy = false;
+  b.disabled = false;
+  b.classList.add("rec"); b.innerHTML = "&#9209; 停止并评分";
+  showSpeakRecHint();
+  clearSpeakTimer();
+  speakState.timer = setTimeout(function(){
+    if (speakState.rec && speakState.rec.state === "recording"){
+      try { speakState.rec.stop(); } catch(e){}
+    }
+  }, SPEAK_MAX_SEC * 1000);
+}
+async function uploadSpeak(mime){
+  var b = $("btnSpeak");
+  b.disabled = true; b.classList.remove("rec"); b.innerHTML = "评分中…";
+  var blob = new Blob(speakState.chunks, {type: mime || "audio/webm"});
+  var ext = (mime || "").indexOf("mp4") >= 0 ? "mp4" : "webm";
+  var fd = new FormData();
+  fd.append("audio", blob, "recording." + ext);
+  fd.append("target", cur().correct);
+  try {
+    var resp = await authFetchRaw("/speech/score", { method: "POST", body: fd });
+    var j = await resp.json().catch(function(){ return {}; });
+    if (!resp.ok || !j.ok){
+      var msg = j.error || j.detail || ("HTTP " + resp.status);
+      if (resp.status === 503) msg = "识别服务暂不可用（未启动或模型加载中），请稍后再试";
+      showSpeakErr("评分失败：" + msg);
+      return;
+    }
+    renderSpeakResult(j);
+    var q = cur();
+    $("fb").innerHTML = '<span class="lbl">' + (j.pass ? "✔ 读对了" : "✘ 没读对") + '</span><br>目标：<b>' + esc(q.correct) + '</b>' +
+      (q.cn ? '<br>中文释义：' + esc(q.cn) : '');
+    applyJudge(j.pass, j.recognized || "(未识别到内容)");
+    b.disabled = true; b.innerHTML = "本轮已评分";
+  } catch(e){
+    showSpeakErr("评分服务不可达，请确认 ASR 服务已启动");
+  } finally {
+    if (!answered){ b.disabled = false; b.innerHTML = "&#127908; 开始朗读"; }
+  }
+}
+$("btnSpeak").addEventListener("click", function(){
+  if (speakState.busy) return;
+  if (speakState.cd){ clearSpeakCd(); startSpeak(); return; }   // 倒计时中点击 = 立即开录
+  if (speakState.rec && speakState.rec.state === "recording"){ speakState.rec.stop(); return; }
+  startSpeak();
+});
 
 /* —— 看义默写：按答案词数渲染 N 个独立输入格 —— */
 function renderSlots(){
@@ -678,13 +916,16 @@ function slotsValue(){
 }
 function applyModeChrome(){
   var meaning = (MODE === "meaning");
-  $("btnPlay").style.display = meaning ? "none" : "";
-  $("input").style.display = meaning ? "none" : "";
-  $("meaningPrompt").style.display = meaning ? "" : "none";
+  var speak = (MODE === "speak");
+  $("btnPlay").style.display = (meaning || speak) ? "none" : "";
+  $("input").style.display = (meaning || speak) ? "none" : "";
+  $("meaningPrompt").style.display = (meaning || speak) ? "" : "none";
   $("slotsBox").style.display = meaning ? "" : "none";
-  if (meaning && cur()){
+  $("speakArea").style.display = speak ? "" : "none";
+  if (speak) $("btnSubmit").style.display = "none";
+  if ((meaning || speak) && cur()){
     $("meaningText").textContent = cur().cn || "";
-    if (!$("slotsBox").children.length) renderSlots();
+    if (meaning && !$("slotsBox").children.length) renderSlots();
   }
 }
 function updateModeUI(){
@@ -1134,7 +1375,8 @@ $("btnBackLists").addEventListener("click", function(){ showLists(); });
 
 function loadPractice(){
   state = null; phase = "first"; idx = 0; answered = false; passedLast = false;
-  MODE = localStorage.getItem("spelling_mode_" + UID) === "meaning" ? "meaning" : "listen";
+  var savedMode = localStorage.getItem("spelling_mode_" + UID);
+  MODE = (savedMode === "meaning" || savedMode === "speak") ? savedMode : "listen";
   updateModeUI();
   $("card").style.display = "";
   $("empty").style.display = "none";

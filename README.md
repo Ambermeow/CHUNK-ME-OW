@@ -51,6 +51,7 @@
 - **数据库**：SQLite（默认，零配置）→ 设 `DATABASE_URL` 一键切 PostgreSQL
 - **安全**：pyjwt（access 30min / refresh 7d）· passlib-argon2 · cryptography(Fernet)
 - **发音**：edge-tts（en-GB-RyanNeural，-10% 语速），导入时生成并缓存为 `sha1[:12].mp3` 音频库
+- **语音评分**：faster-whisper `small.en`（int8）独立 ASR 服务；词级容错比对（别名归一/冠词宽容/编辑距离预算）为主服务内函数，不另起服务
 - **前端**：单文件静态页（无构建）· ECharts（本地 vendor，离线可用）
 - **测试**：pytest（覆盖全部验收标准）
 - **部署**：Docker / docker-compose（app + postgres:16）
@@ -65,6 +66,37 @@ python3.12 -m venv .venv
 ```
 
 打开 http://127.0.0.1:8000/ 注册账号即开练。
+
+### 一键启动脚本（推荐）
+
+后台拉起 ASR(8001) + 主服务(8000)，日志写入 `data/logs/`：
+
+```bash
+./scripts/run.sh start     # 一键后台启动（端口已被占用则自动跳过）
+./scripts/run.sh status    # 查看两服务状态（含 ASR 健康检查）
+./scripts/run.sh logs      # 跟踪两服务日志（Ctrl+C 退出）
+./scripts/run.sh stop      # 停止两服务
+./scripts/run.sh restart   # 重启两服务
+```
+
+### 手动启动（两个终端）
+
+日常练习只需主服务；要用「看义读音」语音评分，需同时启动 ASR 识别服务：
+
+```bash
+# 终端 1：ASR 语音识别服务（无状态纯识别；首次请求懒加载模型，常驻约 1.2GB 内存）
+cd spelling-app
+.venv/bin/uvicorn asr_service.main:app --host 127.0.0.1 --port 8001
+
+# 终端 2：主服务
+cd spelling-app
+.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+- 两个进程通过 `data/.asr_app_key` 自动共享 App Key（请求头 `X-App-Key`），密钥只在后端之间流转，不落前端。
+- ASR 服务与用户/词库完全隔离，可一对多服务其他应用；跨服务器部署时主服务侧设 `ASR_SERVICE_URL` 指向远端即可，代码零改动。
+- 模型优先读取本地 `data/asr_models/`（预置即离线可用）；如需自动下载，国内环境建议 `HF_ENDPOINT=https://hf-mirror.com`。
+- 健康检查：`curl http://127.0.0.1:8001/v1/health`。
 
 ### 迁移旧数据（JSON 词库 → 数据库）
 
@@ -89,6 +121,10 @@ docker compose up -d   # db 端口不对外暴露
 | `ACCESS_TOKEN_TTL_MIN` / `REFRESH_TOKEN_TTL_DAYS` | 令牌有效期 | 30 / 7 |
 | `AUTH_RATE_LIMIT` | 登录限速（次/分/IP） | 5 |
 | `CORS_ORIGINS` | 跨域白名单 | localhost:8000 |
+| `ASR_SERVICE_URL` | 主服务调用 ASR 服务地址 | `http://127.0.0.1:8001` |
+| `ASR_APP_KEY` / `ASR_APP_KEYS` | 主服务侧密钥 / ASR 服务侧多应用密钥（`key:名称,key2:名称2`） | 共享 `data/.asr_app_key` |
+| `ASR_MODEL` | Whisper 模型名 | `small.en` |
+| `ASR_OPEN_MODE` | 置 `1` 免 App Key（仅本地调试） | 关闭 |
 
 ## 三、未来计划
 
@@ -146,6 +182,17 @@ python3.12 -m venv .venv
 ```
 
 Open http://127.0.0.1:8000/ and register.
+
+Speech scoring (the "看义读音" mode) needs a second, stateless ASR service (faster-whisper `small.en`, int8). Run both processes:
+
+```bash
+.venv/bin/uvicorn asr_service.main:app --host 127.0.0.1 --port 8001   # terminal 1
+.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000           # terminal 2
+```
+
+They share an app key via `data/.asr_app_key` (backend-to-backend only, never exposed to the browser). The ASR service is decoupled from users/wordlists and can serve many apps; for cross-server deployment just set `ASR_SERVICE_URL` on the main app. Health check: `GET /v1/health` on port 8001. Env: `ASR_SERVICE_URL`, `ASR_APP_KEY`/`ASR_APP_KEYS`, `ASR_MODEL`, `ASR_OPEN_MODE`.
+
+One-click background script (logs under `data/logs/`): `./scripts/run.sh {start|stop|restart|status|logs}`.
 
 Migrate legacy data:
 

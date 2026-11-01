@@ -54,6 +54,11 @@ CORS_ORIGINS = [o.strip() for o in os.getenv(
     "CORS_ORIGINS",
     "http://localhost:8000,http://127.0.0.1:8000").split(",") if o.strip()]
 
+# ASR 识别服务（独立进程；主服务持 App Key 代理调用，密钥不落前端）
+ASR_SERVICE_URL = os.getenv("ASR_SERVICE_URL", "http://127.0.0.1:8001")
+ASR_APP_KEY = os.getenv("ASR_APP_KEY") or _persist_secret(
+    ".asr_app_key", lambda: secrets.token_urlsafe(24))
+
 # 业务常量（§2.3）
 INTERVALS = ["1", "2", "4", "7", "15"]
 MAX_REVIEW_PER_DAY = 40

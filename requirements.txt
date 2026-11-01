@@ -11,4 +11,7 @@ cryptography>=42.0,<45
 edge-tts>=6.1
 psycopg[binary]>=3.2
 httpx>=0.27
+faster-whisper>=1.0
+av>=12,<14  # faster-whisper 1.2 与 PyAV>=14 不兼容（metadata_errors 参数被移除）
 pytest>=8.2
+python-multipart>=0.0.9
