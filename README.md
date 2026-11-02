@@ -67,6 +67,14 @@ python3.12 -m venv .venv
 
 打开 http://127.0.0.1:8000/ 注册账号即开练。
 
+> **首次启动没有音频？** `data/`（数据库+音频库）不进 git，但音频可由词文本 100% 重新生成（edge-tts，文件名=sha1）。拿到 app.db 后跑一次即可全量重建，幂等只补缺失、需联网：
+>
+> ```bash
+> .venv/bin/python scripts/gen_audio.py
+> ```
+>
+> 日常新增词不需要跑：CSV 导入/手动加词时自动生成音频。
+
 ### 一键启动脚本（推荐）
 
 后台拉起 ASR(8001) + 主服务(8000)，日志写入 `data/logs/`：
@@ -193,6 +201,8 @@ Speech scoring (the "看义读音" mode) needs a second, stateless ASR service (
 They share an app key via `data/.asr_app_key` (backend-to-backend only, never exposed to the browser). The ASR service is decoupled from users/wordlists and can serve many apps; for cross-server deployment just set `ASR_SERVICE_URL` on the main app. Health check: `GET /v1/health` on port 8001. Env: `ASR_SERVICE_URL`, `ASR_APP_KEY`/`ASR_APP_KEYS`, `ASR_MODEL`, `ASR_OPEN_MODE`.
 
 One-click background script (logs under `data/logs/`): `./scripts/run.sh {start|stop|restart|status|logs}`.
+
+`data/` (database + audio library) is not in git, but all audio is regenerable from word text via edge-tts. After bringing in an `app.db`, rebuild missing audio with `.venv/bin/python scripts/gen_audio.py` (idempotent, only fills gaps, requires network).
 
 Migrate legacy data:
 
