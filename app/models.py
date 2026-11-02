@@ -2,7 +2,7 @@
 from datetime import date, datetime, timezone
 
 from sqlalchemy import (JSON, Boolean, Date, DateTime, ForeignKey, Integer,
-                        String, UniqueConstraint)
+                        String, UniqueConstraint, false, true)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -17,6 +17,8 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
+    is_admin: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default=false())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -52,6 +54,10 @@ class Word(Base):
     word: Mapped[str] = mapped_column(String(255), nullable=False)
     cn: Mapped[str | None] = mapped_column(String(512))
     ex: Mapped[str | None] = mapped_column(String(1024))
+    valid_flag: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default=true())
+    example_en: Mapped[str | None] = mapped_column(String(1024))
+    example_cn: Mapped[str | None] = mapped_column(String(1024))
     added_on: Mapped[date] = mapped_column(Date, nullable=False)
     audio: Mapped[str | None] = mapped_column(String(64))
 

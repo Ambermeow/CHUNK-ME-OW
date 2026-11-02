@@ -54,4 +54,4 @@ def refresh(body: RefreshIn, db: Session = Depends(get_db)):
 
 @router.get("/me")
 def me(user: User = Depends(get_current_user)):
-    return {"id": user.id, "email": user.email}
+    return {"id": user.id, "email": user.email, "is_admin": user.is_admin}

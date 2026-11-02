@@ -261,6 +261,35 @@
         letter-spacing:.3px;transition:border-color .15s}
   .slot:focus{border-color:var(--accent)}
   .slot:disabled{background:var(--bg);color:var(--muted)}
+  /* ---- 词条删除：临时/永久 悬浮菜单 ---- */
+  .wl-del-wrap{position:relative;flex:none}
+  .wl-del{width:26px;height:26px;border:1px solid var(--line);background:var(--bg);border-radius:8px;
+        cursor:pointer;font-size:12px;color:var(--muted);line-height:1;padding:0}
+  .wl-del:hover{color:var(--err);border-color:var(--err)}
+  .wl-del-menu{position:absolute;right:0;top:30px;z-index:25;display:none;flex-direction:column;gap:6px;
+        background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px;
+        box-shadow:0 8px 24px rgba(0,0,0,.16);white-space:nowrap}
+  .wl-del-wrap:hover .wl-del-menu,.wl-del-menu.open{display:flex}
+  .wl-del-menu button{border:none;border-radius:8px;padding:6px 12px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  .wl-del-menu .tmp{background:#fffbeb;color:#92400e;border:1px solid #fcd34d}
+  .wl-del-menu .perm{background:var(--err-soft);color:var(--err);border:1px solid #fecaca}
+  .wl-del-menu .restore{background:var(--ok-soft);color:var(--ok);border:1px solid #a7f3d0}
+  .wl-row.invalid .wl-w{color:var(--muted);text-decoration:line-through}
+  .wl-off-tag{flex:none;font-size:11px;color:var(--err);background:var(--err-soft);border-radius:6px;padding:1px 7px}
+  /* ---- 答对例句弹窗 ---- */
+  .ex-panel{width:min(560px,94vw)}
+  .ex-body{padding:18px 22px 22px}
+  .ex-en{font-size:16px;line-height:1.9;color:var(--ink)}
+  .ex-cn{margin-top:10px;font-size:14.5px;color:var(--muted);display:none}
+  .ex-cn.show{display:block}
+  .ex-actions{margin-top:16px;display:flex;gap:8px}
+  .ex-actions .btn{flex:none;padding:8px 18px;font-size:13.5px}
+  /* ---- 管理后台 ---- */
+  .ad-lbl{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 4px;font-weight:600}
+  .ad-ta{width:100%;min-height:64px;padding:9px 12px;border:1.5px solid var(--line);border-radius:10px;
+        font-family:inherit;font-size:14px;resize:vertical;outline:none;box-sizing:border-box}
+  .ad-ta:focus{border-color:var(--accent)}
+  #adminView .wl-card-name{padding-right:0}
 </style>
 </head>
 <body>
@@ -312,7 +341,17 @@
     <h1>我的词库</h1>
     <div class="sub">选择一个词库开始今日练习 · 各词库进度与每日新词相互独立</div>
   </header>
+  <button class="btn ghost" id="btnAdmin" style="display:none;flex:none;margin-top:14px;padding:8px 20px;font-size:13.5px">&#9881; 管理后台</button>
   <div class="wl-grid" id="wlGrid"></div>
+</div>
+
+<div class="wrap" id="adminView" style="display:none">
+  <header>
+    <button class="back-link" id="btnAdminBack">&#8592; 返回我的词库</button>
+    <h1>管理后台</h1>
+    <div class="sub">查看并维护全部词库 · 系统母本与用户词库 · 编辑立即生效</div>
+  </header>
+  <div class="wl-grid" id="adminGrid"></div>
 </div>
 
 <div class="wrap" id="practiceView" style="display:none">
@@ -444,6 +483,56 @@
   </div>
 </div>
 
+<div class="wl-overlay" id="exOverlay">
+  <div class="wl-panel ex-panel">
+    <div class="wl-head">
+      <h3 id="exTitle">例句</h3>
+      <div class="grp"><button class="wl-close" id="exClose" title="关闭">&#10005;</button></div>
+    </div>
+    <div class="ex-body">
+      <div class="ex-en" id="exEn"></div>
+      <div class="ex-cn" id="exCn"></div>
+      <div class="ex-actions">
+        <button class="btn ghost" id="exShowCn" style="display:none">中文翻译</button>
+        <button class="btn primary" id="exOk">继续</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wl-overlay" id="adWlOverlay">
+  <div class="wl-panel">
+    <div class="wl-head">
+      <h3 id="adWlTitle">词库详情</h3>
+      <div class="grp"><button class="wl-close" id="adWlClose" title="关闭">&#10005;</button></div>
+    </div>
+    <div class="wl-list" id="adWlList"></div>
+  </div>
+</div>
+
+<div class="wl-overlay" id="adEditOverlay">
+  <div class="wl-panel" style="width:min(520px,94vw)">
+    <div class="wl-head">
+      <h3>编辑词条</h3>
+      <div class="grp"><button class="wl-close" id="adEditClose" title="关闭">&#10005;</button></div>
+    </div>
+    <div class="imp-body">
+      <label class="ad-lbl" for="adEditWord">单词 / Chunk</label>
+      <input type="text" id="adEditWord" maxlength="255">
+      <label class="ad-lbl" for="adEditCn">中文释义</label>
+      <input type="text" id="adEditCn" maxlength="512">
+      <label class="ad-lbl" for="adEditExEn">英文例句</label>
+      <textarea class="ad-ta" id="adEditExEn" maxlength="1024"></textarea>
+      <label class="ad-lbl" for="adEditExCn">例句中文翻译</label>
+      <textarea class="ad-ta" id="adEditExCn" maxlength="1024"></textarea>
+      <div class="auth-err" id="adEditErr"></div>
+      <div class="imp-actions">
+        <button class="btn primary" id="adEditSave">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
 "use strict";
@@ -479,6 +568,7 @@ function authFetch(path, opts){
         var e = new Error(msg); e.status = resp.status; throw e;
       });
     }
+    if (resp.status === 204) return {};
     return resp.json();
   });
 }
@@ -669,6 +759,8 @@ function applyJudge(ok, errVal){
   $("btnNext").style.display = "";
   renderProgress();
   save();
+  /* 第 1 轮答对 → 弹例句（库里有才弹，无例句静默跳过） */
+  if (ok && phase === "first" && cur() && cur().example_en) showExample(cur());
 }
 
 function submit(){
@@ -1114,6 +1206,8 @@ function renderWL(list){
   }
   list.forEach(function(w){
     var r = document.createElement("div"); r.className = "wl-row";
+    var off = !!(w.id && w.valid === false);
+    if (off) r.classList.add("invalid");
     r.title = w.id ? "点击查看记忆曲线" : "";
     r.innerHTML = '<span class="wl-w"></span><span class="wl-c"></span><span class="wl-s"></span><span class="wl-d"></span>';
     r.children[0].textContent = w.word;
@@ -1122,9 +1216,43 @@ function renderWL(list){
     if (st){ r.children[2].textContent = st; r.children[2].className = "wl-s st-" + st;
              r.children[2].title = {REP:"回炉词",D0:"未学新词",D1:"首天一遍过",D2:"第2天一遍过",D4:"第4天一遍过",D7:"第7天一遍过",D15:"第15天一遍过",COM:"复习完成"}[st] || st; }
     r.children[3].textContent = w.added_on || "";
+    if (off){ var tag = document.createElement("span"); tag.className = "wl-off-tag";
+              tag.textContent = "已停用"; r.insertBefore(tag, r.children[2]); }
+    if (w.id && wlMode !== "next") r.appendChild(buildDelMenu(w));
     if (w.id) r.addEventListener("click", function(){ openCurve(w.id, w.word); });
     box.appendChild(r);
   });
+}
+/* —— 词条删除悬浮菜单：临时删除（停用）/ 永久删除；停用词显示恢复 —— */
+function buildDelMenu(w){
+  var wrap = document.createElement("span"); wrap.className = "wl-del-wrap";
+  wrap.innerHTML = '<button class="wl-del" title="删减">&#128465;</button><div class="wl-del-menu"></div>';
+  var menu = wrap.children[1];
+  var mk = function(label, cls, fn){
+    var b = document.createElement("button"); b.className = cls; b.textContent = label;
+    b.addEventListener("click", function(e){ e.stopPropagation(); fn(); });
+    menu.appendChild(b);
+  };
+  if (w.valid === false){
+    mk("恢复", "restore", function(){ setWordValid(w.id, true); });
+  } else {
+    mk("临时删除", "tmp", function(){ setWordValid(w.id, false); });
+  }
+  mk("永久删除", "perm", function(){
+    if (!confirm('确定永久删除「' + w.word + '」？\n将从词库中删除这一行数据，无法恢复。')) return;
+    authFetch("/words/" + w.id, {method:"DELETE"})
+      .then(function(){ openWL(wlMode); loadDashboard(); })
+      .catch(function(e){ alert("删除失败：" + e.message); });
+  });
+  wrap.children[0].addEventListener("click", function(e){
+    e.stopPropagation(); menu.classList.toggle("open");
+  });
+  return wrap;
+}
+function setWordValid(id, valid){
+  authFetch("/words/" + id + "/valid", {method:"PATCH", body: JSON.stringify({valid: valid})})
+    .then(function(){ openWL(wlMode); loadDashboard(); })
+    .catch(function(e){ alert("操作失败：" + e.message); });
 }
 $("wlSort").addEventListener("click", function(){ wlAsc = !wlAsc; openWL(wlMode); });
 ["s-total","s-started","s-mastered","s-cycling","s-daily","s-unstarted","s-next"].forEach(function(id){
@@ -1263,6 +1391,7 @@ function showLists(){
   document.body.classList.add("lists-mode");
   $("listsView").style.display = "";
   $("practiceView").style.display = "none";
+  $("adminView").style.display = "none";
   $("wlGrid").innerHTML = '<div class="wl-empty">加载中…</div>';
   authFetch("/wordlists").then(renderListsGrid).catch(function(e){
     if (e.status === 401){ showAuth(); return; }
@@ -1414,10 +1543,139 @@ function loadPractice(){
     });
 }
 
+/* ================= 答对例句弹窗 ================= */
+function showExample(q){
+  $("exTitle").textContent = "例句 · " + q.correct;
+  $("exEn").textContent = q.example_en;
+  var cn = $("exCn");
+  cn.textContent = q.example_cn || "";
+  cn.classList.remove("show");
+  $("exShowCn").style.display = q.example_cn ? "" : "none";
+  $("exOverlay").classList.add("open");
+}
+$("exShowCn").addEventListener("click", function(){ $("exCn").classList.add("show"); });
+function closeEx(){ $("exOverlay").classList.remove("open"); }
+$("exOk").addEventListener("click", closeEx);
+$("exClose").addEventListener("click", closeEx);
+$("exOverlay").addEventListener("click", function(e){ if (e.target === this) closeEx(); });
+
+/* ================= 管理后台（仅 admin 可见） ================= */
+var IS_ADMIN = false, AD_WL = null, AD_EDIT_ID = null;
+function showAdmin(){
+  document.body.classList.add("lists-mode");
+  $("listsView").style.display = "none";
+  $("practiceView").style.display = "none";
+  $("adminView").style.display = "";
+  var grid = $("adminGrid");
+  grid.innerHTML = '<div class="wl-empty">加载中…</div>';
+  authFetch("/admin/wordlists").then(function(wls){
+    grid.innerHTML = "";
+    if (!wls.length){ grid.innerHTML = '<div class="wl-empty">暂无词库</div>'; return; }
+    wls.forEach(function(wl){
+      var c = document.createElement("div"); c.className = "wl-card";
+      c.innerHTML = '<div class="wl-card-name"></div>' +
+        '<div class="wl-card-stats"></div><div class="wl-card-n"></div>';
+      c.children[0].textContent = wl.name;
+      c.children[1].textContent = "归属：" + wl.owner + " · 共 " + wl.total + " 词";
+      c.children[2].textContent = (wl.kind === "system" ? "系统母本" : "用户词库") + " · 创建于 " + wl.created_on;
+      c.addEventListener("click", function(){ openAdminWords(wl); });
+      grid.appendChild(c);
+    });
+  }).catch(function(e){
+    grid.innerHTML = '<div class="wl-empty">加载失败：' + esc(e.message) + '</div>';
+  });
+}
+function openAdminWords(wl){
+  AD_WL = wl;
+  $("adWlTitle").innerHTML = esc(wl.name) + ' <span style="color:var(--muted);font-weight:400;font-size:13px">· 归属 ' + esc(wl.owner) + '</span>';
+  $("adWlOverlay").classList.add("open");
+  $("adWlList").innerHTML = '<div class="wl-empty">加载中…</div>';
+  authFetch("/admin/wordlists/" + wl.id + "/words").then(renderAdminWords)
+    .catch(function(e){
+      $("adWlList").innerHTML = '<div class="wl-empty">加载失败：' + esc(e.message) + '</div>';
+    });
+}
+function renderAdminWords(list){
+  var box = $("adWlList"); box.innerHTML = "";
+  if (!list.length){ box.innerHTML = '<div class="wl-empty">暂无词条</div>'; return; }
+  list.forEach(function(w){
+    var r = document.createElement("div");
+    r.className = "wl-row" + (w.valid_flag ? "" : " invalid");
+    r.innerHTML = '<span class="wl-w"></span><span class="wl-c"></span>';
+    r.children[0].textContent = w.word;
+    r.children[1].textContent = w.cn || "";
+    if (!w.valid_flag){
+      var tag = document.createElement("span"); tag.className = "wl-off-tag";
+      tag.textContent = "已停用"; r.appendChild(tag);
+    }
+    var editWrap = document.createElement("span"); editWrap.className = "wl-del-wrap";
+    editWrap.innerHTML = '<button class="wl-del" title="编辑" style="color:var(--accent)">&#9998;</button>';
+    editWrap.children[0].addEventListener("click", function(e){ e.stopPropagation(); openAdminEdit(w); });
+    r.appendChild(editWrap);
+    r.appendChild(buildAdminDelMenu(w));
+    box.appendChild(r);
+  });
+}
+function buildAdminDelMenu(w){
+  var wrap = document.createElement("span"); wrap.className = "wl-del-wrap";
+  wrap.innerHTML = '<button class="wl-del" title="删减">&#128465;</button><div class="wl-del-menu"></div>';
+  var menu = wrap.children[1];
+  var refresh = function(){ openAdminWords(AD_WL); showAdmin(); };
+  var mk = function(label, cls, fn){
+    var b = document.createElement("button"); b.className = cls; b.textContent = label;
+    b.addEventListener("click", function(e){ e.stopPropagation(); fn(); });
+    menu.appendChild(b);
+  };
+  var setValid = function(v){
+    authFetch("/admin/words/" + w.id, {method:"PUT", body: JSON.stringify({valid_flag: v})})
+      .then(refresh).catch(function(e){ alert("操作失败：" + e.message); });
+  };
+  if (w.valid_flag) mk("临时删除", "tmp", function(){ setValid(false); });
+  else mk("恢复", "restore", function(){ setValid(true); });
+  mk("永久删除", "perm", function(){
+    if (!confirm('确定永久删除「' + w.word + '」？\n将从词库中删除这一行数据，无法恢复。')) return;
+    authFetch("/admin/words/" + w.id, {method:"DELETE"})
+      .then(refresh).catch(function(e){ alert("删除失败：" + e.message); });
+  });
+  wrap.children[0].addEventListener("click", function(e){
+    e.stopPropagation(); menu.classList.toggle("open");
+  });
+  return wrap;
+}
+function openAdminEdit(w){
+  AD_EDIT_ID = w.id;
+  $("adEditWord").value = w.word;
+  $("adEditCn").value = w.cn || "";
+  $("adEditExEn").value = w.example_en || "";
+  $("adEditExCn").value = w.example_cn || "";
+  $("adEditErr").textContent = "";
+  $("adEditOverlay").classList.add("open");
+}
+$("adEditSave").addEventListener("click", function(){
+  var body = {
+    word: $("adEditWord").value.trim(), cn: $("adEditCn").value.trim(),
+    example_en: $("adEditExEn").value.trim(), example_cn: $("adEditExCn").value.trim()
+  };
+  if (!body.word){ $("adEditErr").textContent = "单词不能为空"; return; }
+  var btn = this; btn.disabled = true;
+  authFetch("/admin/words/" + AD_EDIT_ID, {method:"PUT", body: JSON.stringify(body)})
+    .then(function(){ $("adEditOverlay").classList.remove("open"); openAdminWords(AD_WL); })
+    .catch(function(e){ $("adEditErr").textContent = e.message; })
+    .finally(function(){ btn.disabled = false; });
+});
+$("adEditClose").addEventListener("click", function(){ $("adEditOverlay").classList.remove("open"); });
+$("adEditOverlay").addEventListener("click", function(e){ if (e.target === this) this.classList.remove("open"); });
+$("adWlClose").addEventListener("click", function(){ $("adWlOverlay").classList.remove("open"); });
+$("adWlOverlay").addEventListener("click", function(e){ if (e.target === this) this.classList.remove("open"); });
+$("btnAdmin").addEventListener("click", showAdmin);
+$("btnAdminBack").addEventListener("click", showLists);
+
 /* ================= 启动 ================= */
 function bootApp(){
   authFetch("/auth/me").then(function(me){
     UID = String(me.id);
+    IS_ADMIN = !!me.is_admin;
+    $("btnAdmin").style.display = IS_ADMIN ? "" : "none";
     showLists();
   }).catch(function(e){
     if (e.status === 401){ showAuth(); return; }

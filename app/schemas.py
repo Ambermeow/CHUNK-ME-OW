@@ -69,6 +69,8 @@ class TodayItem(BaseModel):
     correct: str
     cn: str
     ex: str
+    example_en: str = ""
+    example_cn: str = ""
 
 
 class TodayOut(BaseModel):
@@ -118,6 +120,38 @@ class WordOut(BaseModel):
     cn: str
     added_on: date
     status: str
+    valid: bool = True
+
+
+class WordValidIn(BaseModel):
+    valid: bool
+
+
+class AdminWordlistOut(BaseModel):
+    id: int
+    name: str
+    kind: str
+    owner: str
+    total: int
+    created_on: date
+
+
+class AdminWordOut(BaseModel):
+    id: int
+    word: str
+    cn: str
+    example_en: str
+    example_cn: str
+    valid_flag: bool
+    added_on: date
+
+
+class AdminWordUpdate(BaseModel):
+    word: str | None = Field(default=None, min_length=1, max_length=255)
+    cn: str | None = Field(default=None, max_length=512)
+    example_en: str | None = Field(default=None, max_length=1024)
+    example_cn: str | None = Field(default=None, max_length=1024)
+    valid_flag: bool | None = None
 
 
 class HistoryPoint(BaseModel):

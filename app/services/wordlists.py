@@ -86,6 +86,17 @@ def add_preset(db: Session, user_id: int, preset_id: int) -> Wordlist:
     return wl
 
 
+def delete_word_cascade(db: Session, word_id: int) -> None:
+    """永久删除单个词条并级联清理其进度与会话明细（仅 flush 不 commit）。"""
+    db.query(WordProgress).filter(
+        WordProgress.word_id == word_id).delete(synchronize_session=False)
+    db.query(SessionItem).filter(
+        SessionItem.word_id == word_id).delete(synchronize_session=False)
+    word = db.get(Word, word_id)
+    if word is not None:
+        db.delete(word)
+
+
 def delete_wordlist(db: Session, user_id: int, wordlist_id: int) -> None:
     """删除词库并级联清理：词条、进度、会话与明细。"""
     wl = get_owned(db, user_id, wordlist_id)

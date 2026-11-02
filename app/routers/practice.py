@@ -20,7 +20,8 @@ def _queue_items(db: Session, user_id: int, wordlist_id: int, due: date):
     queue = review + new_words
     items = [
         TodayItem(i=idx + 1, audio_url=f"/api/voice/{w.audio or ''}",
-                  correct=w.word, cn=w.cn or "", ex=w.ex or "")
+                  correct=w.word, cn=w.cn or "", ex=w.ex or "",
+                  example_en=w.example_en or "", example_cn=w.example_cn or "")
         for idx, w in enumerate(queue)
     ]
     return queue, items

@@ -27,18 +27,22 @@ def word_status(p: WordProgress | None) -> str:
     return last
 
 
-def _rows(db: Session, user_id: int, wordlist_id: int):
-    """指定词库内当前用户全部词 + 进度（左连接），按加入顺序。"""
-    return (
+def _rows(db: Session, user_id: int, wordlist_id: int, only_valid: bool = True):
+    """指定词库内当前用户词 + 进度（左连接），按加入顺序。
+
+    only_valid=True 时只取 valid_flag=True 的词（背词/统计口径）。
+    """
+    q = (
         db.query(Word, WordProgress)
         .outerjoin(
             WordProgress,
             and_(WordProgress.word_id == Word.id, WordProgress.user_id == user_id),
         )
         .filter(Word.user_id == user_id, Word.wordlist_id == wordlist_id)
-        .order_by(Word.id)
-        .all()
     )
+    if only_valid:
+        q = q.filter(Word.valid_flag.is_(True))
+    return q.order_by(Word.id).all()
 
 
 def effective_new_cap(wordlist: Wordlist) -> int:
