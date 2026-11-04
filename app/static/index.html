@@ -539,6 +539,20 @@
 var API = "/api";
 var $ = function(id){ return document.getElementById(id); };
 function norm(s){ return (s||"").toLowerCase().replace(/[^a-z0-9]/g,""); }
+/* 冠词宽松判定：听音频时 a/the 分不清 —— 互换、多写、漏写 a/the 均不算错。
+   做法：两侧先剔除全部 a/the，再逐词比对剩余部分（大小写/标点仍忽略）。 */
+function _isArt(t){ return t === "a" || t === "the"; }
+function judgeEq(v, c){
+  if (norm(v) === norm(c)) return true;
+  function toks(s){
+    return (s||"").toLowerCase().replace(/[^a-z0-9\s]/g," ")
+      .split(/\s+/).filter(function(t){ return t && !_isArt(t); });
+  }
+  var ta = toks(v), tb = toks(c), i;
+  if (ta.length !== tb.length) return false;
+  for (i = 0; i < ta.length; i++){ if (ta[i] !== tb[i]) return false; }
+  return true;
+}
 function esc(s){ var d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
 
 /* ================= 认证与请求 ================= */
@@ -768,7 +782,7 @@ function submit(){
   var q = cur();
   var val = (MODE === "meaning") ? slotsValue() : $("input").value.trim();
   if (!val){ return; }
-  var ok = (norm(val) === norm(q.correct));   // 严格相等；大小写/空格/标点不计较
+  var ok = judgeEq(val, q.correct);   // 大小写/空格/标点不计较；a/the 互换或多写不算错
   $("fb").innerHTML = '<span class="lbl">' + (ok ? "✔ 正确" : "✘ 拼错") + "</span><br>你的拼写：" + esc(val) +
              "<br>正确拼写：<b>" + esc(q.correct) + "</b>" +
              (q.cn ? "<br>中文释义：" + esc(q.cn) : "");
